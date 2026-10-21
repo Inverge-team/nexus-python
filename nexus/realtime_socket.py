@@ -109,7 +109,10 @@ class RealtimeSocket:
         return auth
 
     def connect(self, *, wait: bool = True, timeout: float = 10.0) -> "RealtimeSocket":
-        """Open the connection. Idempotent."""
+        """Open the connection. Idempotent. A no-op when realtime is switched off."""
+        if not self.config.service_enabled("realtime"):
+            logger.info("nexus: realtime is switched off (%s) — not connecting", self.config.services_off["realtime"])
+            return self
         with self._lock:
             if self._sio is not None and getattr(self._sio, "connected", False):
                 return self

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional, Union
 
+from .. import _services
 from .. import _payloads as p
 from .. import context as ctx
 from .._engine import AsyncHttpEngine
@@ -71,6 +72,7 @@ class AsyncNexusClient:
         set_debug(config.debug)
         self.engine = AsyncHttpEngine(config, transport)
         self._closed = False
+        self._skipped: set = set()  # switched-off services already logged
         self._pending_tasks: set = set()
 
         self._event_queue: Optional[AsyncBatchQueue] = None
@@ -164,6 +166,8 @@ class AsyncNexusClient:
 
     async def request(self, request: p.Request) -> Any:
         """Execute one partner-API request (raises unless ``silent``)."""
+        if self._switched_off(request.path):
+            return None
         if self._closed:
             logger.warning("nexus: request after aclose() — %s %s", request.method, request.path)
             return None
@@ -175,13 +179,30 @@ class AsyncNexusClient:
                 return None
             raise
 
+    def enabled(self, service: str) -> bool:
+        """Whether a product is switched on — ``services`` / ``NEXUS_<SERVICE>_ENABLED``."""
+        return self.config.service_enabled(service)
+
+    def _switched_off(self, path: str) -> bool:
+        service = _services.service_for_path(path)
+        if service is None or self.config.service_enabled(service):
+            return False
+        if service not in self._skipped:
+            self._skipped.add(service)
+            logger.info("nexus: %s is switched off (%s) — skipping its calls", service, self.config.services_off[service])
+        return True
+
     def enqueue_event(self, item: Mapping[str, Any], context: Mapping[str, Any]) -> None:
+        if not self.config.service_enabled("events"):
+            return  # switched off — don't even buffer
         if self._event_queue is not None:
             self._event_queue.add(item, context)
         else:
             self._spawn(self._deliver_events([dict(item)], dict(context)))
 
     def enqueue_log(self, item: Mapping[str, Any], context: Mapping[str, Any]) -> None:
+        if not self.config.service_enabled("logs"):
+            return  # switched off — don't even buffer
         if self._log_queue is not None:
             self._log_queue.add(item, context)
         else:

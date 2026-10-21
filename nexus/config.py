@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Mapping, Optional
 
+from . import _services
 from ._version import __version__
 from .exceptions import ConfigurationError
 
@@ -110,6 +111,13 @@ class NexusConfig:
     debug: bool = False
     user_agent: Optional[str] = None
 
+    #: Per-service switches, e.g. ``{"live_activities": False}`` (see :mod:`nexus._services`).
+    services: Mapping[str, Any] = field(default_factory=dict)
+    #: ``False`` switches every service off.
+    enabled: bool = True
+    #: Effective switched-off services → why (code or environment). Computed.
+    services_off: Mapping[str, str] = field(default_factory=dict)
+
     def __post_init__(self) -> None:
         if not self.api_key or not str(self.api_key).strip():
             raise ConfigurationError("A Nexus API key is required (nxs_...).")
@@ -123,6 +131,17 @@ class NexusConfig:
             object.__setattr__(self, "realtime_url", str(self.realtime_url).rstrip("/"))
         object.__setattr__(self, "default_headers", dict(self.default_headers))
         object.__setattr__(self, "default_properties", dict(self.default_properties))
+        # Built directly (not via create()): switches come from code only.
+        if not self.services_off:
+            all_on, off = _services.resolve(self.services, self.enabled, {})
+            object.__setattr__(self, "enabled", all_on)
+            object.__setattr__(self, "services_off", off)
+        else:
+            object.__setattr__(self, "services_off", dict(self.services_off))
+
+    def service_enabled(self, service: str) -> bool:
+        """Whether a product is switched on (code + ``NEXUS_<SERVICE>_ENABLED``, off wins)."""
+        return service not in self.services_off
 
     # ── derived ──────────────────────────────────────────────────────────────
 
@@ -145,6 +164,12 @@ class NexusConfig:
 
     def with_(self, **changes: Any) -> "NexusConfig":
         """A copy with some fields changed."""
+        if "services" in changes or "enabled" in changes:
+            # New switches: recompute against the environment (off wins).
+            services = changes.get("services", self.services)
+            enabled = changes.get("enabled", True)
+            all_on, off = _services.resolve(services, enabled, os.environ)
+            changes = {**changes, "services": dict(services or {}), "enabled": all_on, "services_off": off}
         return replace(self, **changes)
 
     # ── factories ────────────────────────────────────────────────────────────
@@ -188,6 +213,9 @@ class NexusConfig:
             silent=_as_bool(pick("silent", "SILENT"), False),
             debug=_as_bool(pick("debug", "DEBUG"), False),
             user_agent=(lambda v: str(v) if v else None)(pick("user_agent", "userAgent")),
+            services=dict(pick("services") or {}),
+            enabled=_services.is_on(pick("enabled")),
+            services_off=dict(pick("services_off") or {}),
         )
 
     #: Config field → the environment variable that supplies it.
@@ -229,6 +257,10 @@ class NexusConfig:
         values.update({k: v for k, v in options.items() if v is not None})
         if api_key:
             values["api_key"] = api_key
+        # Service switches: code + NEXUS_<SERVICE>_ENABLED / NEXUS_ENABLED, off wins.
+        all_on, off = _services.resolve(values.get("services"), values.get("enabled", True), env)
+        values["enabled"] = all_on
+        values["services_off"] = off
         if not values.get("api_key"):
             raise ConfigurationError(
                 "No Nexus API key. Pass api_key='nxs_...' or export NEXUS_API_KEY."

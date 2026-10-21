@@ -150,6 +150,44 @@ code. Precedence, lowest first: environment → keyword options → `api_key`.
 
 ---
 
+### Switching services off
+
+Turn a Nexus product off **without removing the code that uses it**. A
+switched-off service makes no request and never raises — even without
+`silent=True`: calls return their neutral value (`{}` / `[]` / your defaults),
+events and logs aren't even buffered, and the realtime socket doesn't connect.
+All default to on.
+
+```dotenv
+NEXUS_LIVE_ACTIVITIES_ENABLED=false   # just Live Activities
+NEXUS_ENABLED=false                   # everything (e.g. tests / CI)
+```
+
+| Variable | `services` key | Switches off |
+|---|---|---|
+| `NEXUS_REALTIME_ENABLED` | `realtime` | rooms / emits |
+| `NEXUS_EVENTS_ENABLED` | `events` | events |
+| `NEXUS_ERRORS_ENABLED` | `errors` | error capture |
+| `NEXUS_LOGS_ENABLED` | `logs` | logs |
+| `NEXUS_SESSIONS_ENABLED` | `sessions` | sessions |
+| `NEXUS_FLAGS_ENABLED` | `flags` | feature flags (→ your defaults) |
+| `NEXUS_REMOTE_CONFIG_ENABLED` | `remote_config` | Remote Config (→ your defaults) |
+| `NEXUS_LINKS_ENABLED` | `links` | deep links |
+| `NEXUS_SURVEYS_ENABLED` | `surveys` | surveys |
+| `NEXUS_PUSH_ENABLED` | `push` | push notifications |
+| `NEXUS_IN_APP_ENABLED` | `in_app` | in-app messages |
+| `NEXUS_LIVE_ACTIVITIES_ENABLED` | `live_activities` | Live Activities |
+| `NEXUS_REPLAY_ENABLED` | `replay` | session replay |
+| `NEXUS_VOICE_ENABLED` | `voice` | voice |
+
+In code: `NexusClient(key, services={"live_activities": False})` or
+`enabled=False` (the other SDKs' camelCase names work too). Off wins: a service
+is on only if neither the code nor the environment turns it off, so ops can
+always switch one off with an environment variable. `client.enabled("push")`
+tells you whether one is on; unknown names raise `ConfigurationError`.
+
+---
+
 ## 4. Three ways to use it
 
 **A client object** — explicit, injectable, trivially testable. Best in

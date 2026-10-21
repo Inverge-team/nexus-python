@@ -4,6 +4,16 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.2.0] — 2026-10-21
+
+### Added
+
+- **Switch services off without removing code** — `NEXUS_<SERVICE>_ENABLED=false`
+  (and `NEXUS_ENABLED=false` for all) or `services={...}` / `enabled=False` in
+  code; off wins. A switched-off service makes no request and never raises (even
+  without `silent`), events/logs aren't buffered, the realtime socket doesn't
+  connect. `client.enabled(service)`.
+
 ## [1.1.0] — 2026-10-21
 
 ### Added
