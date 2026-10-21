@@ -4,6 +4,23 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.1.0] — 2026-10-21
+
+### Added
+
+- **Live Activity templates.** `client.live_activities.template(key, activity_id)`
+  starts an activity from a template designed in the Nexus console (or an inline
+  design) and sends only data; the mobile SDKs render it on iOS + Android in each
+  device's language. New builder setters `step`, `eta_at`, `eta`, `value`/`values`,
+  `canceled`, `done`, `data`, plus `lang` / `alert` for the start. Updates and ends
+  send partial `data` the server merges. Plain forms `start_template`,
+  `update_data`, `end(..., data=...)` — sync and async.
+
+### Unchanged
+
+- The plain `activity(type, id)` contentState path; `progress()` / texts on their
+  own still send `contentState`.
+
 ## [1.0.0] — 2026-10-04
 
 First release. Full coverage of the Nexus partner API from Python.

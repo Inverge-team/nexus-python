@@ -751,10 +751,49 @@ class AsyncLiveActivities(AsyncResource):
 
     def activity(self, activity_type_or_id: str, activity_id: Optional[str] = None) -> LiveActivityBuilder:
         if activity_id is None:
-            return LiveActivityBuilder(self.start, self.update, self.end, activity_type_or_id)  # type: ignore[arg-type]
+            return self._builder(activity_type_or_id)
+        return self._builder(activity_id, activity_type_or_id)
+
+    def template(self, template: Union[str, Mapping[str, Any]], activity_id: str) -> LiveActivityBuilder:
+        """A templated activity — see :meth:`nexus.resources.LiveActivities.template`."""
+        return self._builder(activity_id, template=template)
+
+    def _builder(self, activity_id: str, activity_type: Optional[str] = None, template: Any = None) -> LiveActivityBuilder:
         return LiveActivityBuilder(
-            self.start, self.update, self.end, activity_id, activity_type_or_id  # type: ignore[arg-type]
+            self.start, self.update, self.end, activity_id, activity_type,  # type: ignore[arg-type]
+            template=template, start_template_fn=self.start_template, update_data_fn=self.update_data,  # type: ignore[arg-type]
         )
+
+    async def start_template(
+        self,
+        template: Union[str, Mapping[str, Any]],
+        activity_id: str,
+        data: Optional[Mapping[str, Any]] = None,
+        *,
+        distinct_ids: Optional[Sequence[str]] = None,
+        lang: Optional[str] = None,
+        alert: Optional[Mapping[str, Any]] = None,
+        attributes: Optional[Mapping[str, Any]] = None,
+        stale_date: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        return self._dict(
+            await self._send(
+                p.live_activity_start_template(
+                    template, activity_id, data, distinct_ids, lang, alert, attributes, stale_date, priority
+                )
+            )
+        )
+
+    async def update_data(
+        self,
+        activity_id: str,
+        data: Mapping[str, Any],
+        *,
+        stale_date: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        return self._dict(await self._send(p.live_activity_update_data(activity_id, data, stale_date, priority)))
 
     async def start(
         self,
@@ -792,9 +831,10 @@ class AsyncLiveActivities(AsyncResource):
         activity_id: str,
         content_state: Optional[Mapping[str, Any]] = None,
         *,
+        data: Optional[Mapping[str, Any]] = None,
         dismissal_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return self._dict(await self._send(p.live_activity_end(activity_id, content_state, dismissal_date)))
+        return self._dict(await self._send(p.live_activity_end(activity_id, content_state, dismissal_date, data)))
 
     async def register_push_to_start_token(
         self, activity_type: str, token: str, *, distinct_id=None, device_key=None

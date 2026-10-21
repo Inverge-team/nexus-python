@@ -72,6 +72,10 @@ class AsyncClientTest(unittest.TestCase):
             client, transport = make_async_client()
             await client.live_activities.activity("T", "a1").status("Go").start()
             self.assertEqual(transport.last["path"], "partner/live-activities/start")
+            await client.live_activities.template("order_tracking", "a2").step("pending").start()
+            self.assertEqual(transport.last["json"]["template"], "order_tracking")
+            await client.live_activities.activity("a2").step("arrived").update()
+            self.assertEqual(transport.last["json"], {"data": {"step": "arrived"}})
             await client.aclose()
 
         run(scenario())

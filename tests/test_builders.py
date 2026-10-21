@@ -85,5 +85,68 @@ class LiveActivityBuilderTest(unittest.TestCase):
             client.live_activities.activity("order_42").status("x").start()
 
 
+class LiveActivityTemplateTest(unittest.TestCase):
+    def test_templated_start(self):
+        import datetime as dt
+
+        client, transport = make_client()
+        (
+            client.live_activities.template("order_tracking", "order_42")
+            .step("pending")
+            .eta_at(dt.datetime(2026, 10, 21, 12, 0, 0))  # naive = UTC
+            .value("driver", "Ahmed")
+            .values(liters=500)
+            .to_user("user_1")
+            .lang("ckb")
+            .alert("Order received", "500 L")
+            .start()
+        )
+        body = transport.last["json"]
+        self.assertEqual(transport.last["path"], "partner/live-activities/start")
+        self.assertEqual(body["template"], "order_tracking")
+        self.assertNotIn("activityType", body)  # the server targets the SDK widget's type
+        self.assertNotIn("contentState", body)
+        self.assertEqual(body["data"], {"step": "pending", "etaAt": 1792584000, "values": {"driver": "Ahmed", "liters": 500}})
+        self.assertEqual(body["distinctIds"], ["user_1"])
+        self.assertEqual(body["lang"], "ckb")
+        self.assertEqual(body["alert"], {"title": "Order received", "body": "500 L"})
+
+    def test_partial_update_and_final_end(self):
+        client, transport = make_client()
+        client.live_activities.activity("order_42").step("arrived").progress(0.5).update()
+        self.assertEqual(transport.last["path"], "partner/live-activities/order_42/update")
+        self.assertEqual(transport.last["json"], {"data": {"step": "arrived", "progress": 0.5}})
+
+        client.live_activities.activity("order_42").step("completed").end()
+        self.assertEqual(transport.last["json"], {"data": {"step": "completed"}})
+
+        client.live_activities.activity("order_42").canceled().end()
+        self.assertEqual(transport.last["json"], {"data": {"state": "canceled"}})
+
+    def test_progress_alone_stays_plain(self):
+        client, transport = make_client()
+        client.live_activities.activity("order_42").status("On the way").progress(70).update()
+        self.assertEqual(transport.last["json"], {"contentState": {"status": "On the way", "progress": 70}})
+
+    def test_plain_methods_and_inline_template(self):
+        client, transport = make_client()
+        client.live_activities.start_template({"layout": "steps", "steps": [{"id": "a"}, {"id": "b"}]}, "o1", {"step": "a"})
+        self.assertEqual(len(transport.last["json"]["template"]["steps"]), 2)
+        client.live_activities.update_data("o1", {"step": "b", "etaAt": None})
+        self.assertEqual(transport.last["json"], {"data": {"step": "b", "etaAt": None}})  # None clears it
+        client.live_activities.end("o1", data={"state": "done"})
+        self.assertEqual(transport.last["json"], {"data": {"state": "done"}})
+
+    def test_eta_accepts_ms(self):
+        client, transport = make_client()
+        client.live_activities.template("t", "o").eta_at(1792584000123).start()
+        self.assertEqual(transport.last["json"]["data"]["etaAt"], 1792584000)
+
+    def test_start_needs_a_template_or_type(self):
+        client, _ = make_client()
+        with self.assertRaisesRegex(ValueError, "template"):
+            client.live_activities.activity("o").step("a").start()
+
+
 if __name__ == "__main__":
     unittest.main()

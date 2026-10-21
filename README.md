@@ -728,7 +728,41 @@ client.inapp.dismiss("msg_1", distinct_id="user_1")
 ## 18. Live Activities
 
 A live, updating view of an in-progress event on the iOS Lock Screen / Dynamic
-Island and as an Android live notification — driven from your backend.
+Island and as an Android 16 Live Update — driven from your backend.
+
+### Templates (recommended)
+
+Design the activity once in the Nexus console (**Live Activities → Templates**:
+layout, colours, steps, icons, translations). The Nexus mobile SDKs render it on
+iOS and Android, each device in its own language — your server sends only data:
+
+```python
+import datetime as dt
+
+(client.live_activities.template("order_tracking", "order_42")   # template key + your id
+    .step("pending")                                             # a step id (or label)
+    .eta_at(dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=25))  # live countdown
+    .values(driver="Ahmed", quantity="500 L · Diesel")           # {{placeholders}}
+    .to_user("user_1")
+    .start())
+
+# Updates are partial — only what changed; the server merges it.
+client.live_activities.activity("order_42").step("on_the_way").progress(0.4).update()
+client.live_activities.activity("order_42").step("completed").end()   # final state
+client.live_activities.activity("order_42").canceled().end()          # or canceled
+```
+
+Data setters: `step`, `progress` (0–1 toward the next step), `eta_at` (datetime /
+unix s / ms) or `eta("8 min")` for fixed text, `value(k, v)` / `values(...)`,
+`canceled()`, `done()`, `data({...})`, `title/subtitle/body` (override the
+template's texts). Start-only: `lang("ar")` forces one language for everyone
+(default: each device's app language), `alert(title, body)`. Plain forms:
+`start_template(template, id, data, ...)`, `update_data(id, data)`,
+`end(id, data=...)`; `None` inside `data` clears a field. `template` may also be
+an inline design dict. The start result includes `iosTargets` and, when iOS got
+nothing, an `iosWarning` saying why.
+
+### Plain (your own iOS widget)
 
 ```python
 (client.live_activities.activity("DeliveryAttributes", "order_42")
@@ -751,8 +785,8 @@ Targeting: `.to_user(s)` for a per-order activity, `.shared()` for one everyone
 watches. Priority 5 is routine (unmetered), 10 is immediate (metered).
 
 > **iOS** needs the APNs key configured in the console (Live Activities cannot
-> go through FCM) and a Widget Extension in the app. **Android** renders a live
-> notification with no extra setup.
+> go through FCM) and the one-time Widget Extension in the app (see the Flutter
+> SDK README). **Android** needs no extra setup.
 
 ---
 

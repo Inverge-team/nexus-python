@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inverge-nexus"
-version = "1.0.0"
+version = "1.1.0"
 description = "Nexus — one Python SDK for all Inverge Nexus services (analytics, logs, errors, feature flags, remote config, realtime, push, surveys, voice). Works in Django, Flask, FastAPI, Celery and plain scripts."
 readme = "README.md"
 # The TOML-table form is deprecated in favour of the PEP 639 string, but that

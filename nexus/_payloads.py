@@ -506,17 +506,67 @@ def live_activity_update(
 
 
 def live_activity_end(
-    activity_id: str, content_state: Optional[Mapping[str, Any]], dismissal_date: Optional[str]
+    activity_id: str,
+    content_state: Optional[Mapping[str, Any]],
+    dismissal_date: Optional[str],
+    data: Optional[Mapping[str, Any]] = None,
 ) -> Request:
     return Request(
         "POST",
         "/partner/live-activities/{0}/end".format(_seg(activity_id)),
         compact(
             {
+                "data": dict(data) if data else None,
                 "contentState": dict(content_state) if content_state else None,
                 "dismissalDate": dismissal_date,
             }
         ),
+    )
+
+
+def live_activity_start_template(
+    template: Union[str, Mapping[str, Any]],
+    activity_id: str,
+    data: Optional[Mapping[str, Any]],
+    distinct_ids: Optional[Sequence[str]],
+    lang: Optional[str],
+    alert: Optional[Mapping[str, Any]],
+    attributes: Optional[Mapping[str, Any]],
+    stale_date: Optional[str],
+    priority: Optional[int],
+) -> Request:
+    """A templated start: ``template`` is a console template key or an inline design.
+    No ``activityType`` — the server targets the SDK widget's type."""
+    return Request(
+        "POST",
+        "/partner/live-activities/start",
+        compact(
+            {
+                "template": template if isinstance(template, str) else dict(template),
+                "activityId": activity_id,
+                "data": _obj(data),
+                "distinctIds": list(distinct_ids) if distinct_ids else None,
+                "lang": lang,
+                "alert": dict(alert) if alert else None,
+                "attributes": dict(attributes) if attributes else None,
+                "staleDate": stale_date,
+                "priority": priority,
+            }
+        ),
+    )
+
+
+def live_activity_update_data(
+    activity_id: str,
+    data: Optional[Mapping[str, Any]],
+    stale_date: Optional[str],
+    priority: Optional[int],
+) -> Request:
+    """A templated update: partial ``data`` the server merges (``None`` inside it clears a field)."""
+    return Request(
+        "POST",
+        "/partner/live-activities/{0}/update".format(_seg(activity_id)),
+        compact({"data": _obj(data), "staleDate": stale_date, "priority": priority}),
     )
 
 

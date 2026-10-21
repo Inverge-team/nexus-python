@@ -10,7 +10,7 @@ through FCM) and a Widget Extension in the app. Android needs no extra setup.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
 from .. import _payloads as p
 from ..builders.live_activity import LiveActivityBuilder
@@ -29,8 +29,55 @@ class LiveActivities(Resource):
         an existing one (the type is only needed at start).
         """
         if activity_id is None:
-            return LiveActivityBuilder(self.start, self.update, self.end, activity_type_or_id)
-        return LiveActivityBuilder(self.start, self.update, self.end, activity_id, activity_type_or_id)
+            return self._builder(activity_type_or_id)
+        return self._builder(activity_id, activity_type_or_id)
+
+    def template(self, template: Union[str, Mapping[str, Any]], activity_id: str) -> LiveActivityBuilder:
+        """A templated activity: ``template`` is a template key from the Nexus
+        console (e.g. ``"order_tracking"``) or an inline design. Send only data."""
+        return self._builder(activity_id, template=template)
+
+    def _builder(self, activity_id: str, activity_type: Optional[str] = None, template: Any = None) -> LiveActivityBuilder:
+        return LiveActivityBuilder(
+            self.start, self.update, self.end, activity_id, activity_type,
+            template=template, start_template_fn=self.start_template, update_data_fn=self.update_data,
+        )
+
+    def start_template(
+        self,
+        template: Union[str, Mapping[str, Any]],
+        activity_id: str,
+        data: Optional[Mapping[str, Any]] = None,
+        *,
+        distinct_ids: Optional[Sequence[str]] = None,
+        lang: Optional[str] = None,
+        alert: Optional[Mapping[str, Any]] = None,
+        attributes: Optional[Mapping[str, Any]] = None,
+        stale_date: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Start a templated activity. ``data``: ``step``, ``state``, ``progress``,
+        ``etaAt`` (unix s), ``values``. Each device gets its own language unless
+        ``lang`` forces one. Returns ``{ios, android, iosTargets, iosWarning?}``."""
+        return self._dict(
+            self._send(
+                p.live_activity_start_template(
+                    template, activity_id, data, distinct_ids, lang, alert, attributes, stale_date, priority
+                )
+            )
+        )
+
+    def update_data(
+        self,
+        activity_id: str,
+        data: Mapping[str, Any],
+        *,
+        stale_date: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Update a templated activity with partial data — merged server-side
+        (``None`` inside ``data`` clears a field)."""
+        return self._dict(self._send(p.live_activity_update_data(activity_id, data, stale_date, priority)))
 
     def start(
         self,
@@ -74,10 +121,12 @@ class LiveActivities(Resource):
         activity_id: str,
         content_state: Optional[Mapping[str, Any]] = None,
         *,
+        data: Optional[Mapping[str, Any]] = None,
         dismissal_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """End the activity, optionally with a final state and dismissal time."""
-        return self._dict(self._send(p.live_activity_end(activity_id, content_state, dismissal_date)))
+        """End the activity, optionally with a final state and dismissal time.
+        Templated: ``data`` is the final state, e.g. ``{"step": "completed"}``."""
+        return self._dict(self._send(p.live_activity_end(activity_id, content_state, dismissal_date, data)))
 
     def register_push_to_start_token(
         self,
