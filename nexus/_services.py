@@ -36,6 +36,7 @@ SERVICE_ENV: Dict[str, str] = {
     "live_activities": "NEXUS_LIVE_ACTIVITIES_ENABLED",
     "replay": "NEXUS_REPLAY_ENABLED",
     "voice": "NEXUS_VOICE_ENABLED",
+    "telescope": "NEXUS_TELESCOPE_ENABLED",
 }
 
 #: The master switch.
@@ -57,6 +58,7 @@ _PATHS: Dict[str, str] = {
     "live-activities": "live_activities",
     "replay": "replay",
     "voice": "voice",
+    "telescope": "telescope",
 }
 
 

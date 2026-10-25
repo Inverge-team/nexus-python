@@ -4,6 +4,21 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.0] — 2026-10-25
+
+### Added
+
+- **Nexus Telescope** — `nexus.telescope` records request journeys: Django
+  (`DjangoTelescopeMiddleware`: ORM queries, model saves/deletes), FastAPI /
+  Starlette and any ASGI app (`TelescopeASGIMiddleware`), Flask
+  (`instrument_flask`) and any WSGI app, Celery tasks as jobs that join the
+  dispatching trace, plus `requests` / `httpx` (W3C `traceparent` propagated),
+  SQLAlchemy, redis-py and the `logging` module. Spans (`with telescope.span()`,
+  `@telescope.traced()`), jobs/commands/schedules, tail sampling and console
+  settings. Context on `contextvars` (per thread and per asyncio task); delivery
+  on a fork-safe background thread whose `flush()` waits for in-flight batches.
+  Switch off with `NEXUS_TELESCOPE_ENABLED=false`.
+
 ## [1.2.0] — 2026-10-21
 
 ### Added
