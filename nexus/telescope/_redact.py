@@ -39,6 +39,22 @@ class Redactor:
         return value
 
 
+_STATUS_RANGE = re.compile(r"^(\d{3})\s*-\s*(\d{3})$")
+
+
+def status_match(pattern: str, status: str) -> bool:
+    """``200`` (exact), ``2xx`` (class) or ``301-304`` (inclusive range) against a 3-digit status."""
+    if not re.fullmatch(r"\d{3}", status):
+        return False
+    p = pattern.strip().lower()
+    if re.fullmatch(r"\dxx", p):
+        return p[0] == status[0]
+    m = _STATUS_RANGE.match(p)
+    if m:
+        return int(m.group(1)) <= int(status) <= int(m.group(2))
+    return p == status
+
+
 def glob_match(glob: str, value: str) -> bool:
     return fnmatch.fnmatchcase(value.lower(), glob.lower())
 

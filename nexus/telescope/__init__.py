@@ -162,7 +162,7 @@ def init(
     **options: Any,
 ) -> Telescope:
     """Create (once) the process-wide Telescope. Options: ``service``, ``release``,
-    ``sample_rate``, ``ignore_paths``, ``ignore_types``, ``redact_keys``,
+    ``sample_rate``, ``ignore_paths``, ``ignore_statuses``, ``ignore_types``, ``redact_keys``,
     ``capture_bodies``, ``body_size_limit``, ``max_entries``, ``enabled``."""
     global _instance
     with _lock:

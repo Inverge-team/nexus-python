@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 
 from .. import _payloads as p
 from .._logging import logger
-from ._redact import Redactor, glob_match, parse_traceparent, safe
+from ._redact import Redactor, glob_match, parse_traceparent, safe, status_match
 
 SDK_NAME = "nexus-python"
 
@@ -116,6 +116,7 @@ class Recorder:
         release: Optional[str] = None,
         sample_rate: Optional[float] = None,
         ignore_paths: Sequence[str] = ("/health*", "/healthz", "/favicon.ico", "/static/*"),
+        ignore_statuses: Optional[Sequence[Any]] = None,
         ignore_types: Sequence[str] = (),
         redact_keys: Sequence[str] = (),
         capture_bodies: bool = True,
@@ -130,6 +131,10 @@ class Recorder:
         env_rate = os.environ.get("NEXUS_TELESCOPE_SAMPLE_RATE")
         self.sample_rate = sample_rate if sample_rate is not None else (float(env_rate) if env_rate else None)
         self.ignore_paths = list(ignore_paths)
+        # ``200``, ``2xx`` or ``301-304``; merged with the console's list.
+        if ignore_statuses is None:
+            ignore_statuses = [s.strip() for s in os.environ.get("NEXUS_TELESCOPE_IGNORE_STATUSES", "").split(",") if s.strip()]
+        self.ignore_statuses = [str(s) for s in ignore_statuses]
         self.ignore_types = list(ignore_types)
         self.redact_keys = list(redact_keys)
         self.capture_bodies = capture_bodies
@@ -169,6 +174,11 @@ class Recorder:
 
     def ignores_path(self, path: str) -> bool:
         return any(glob_match(g, path) for g in [*self.ignore_paths, *(self.remote.get("ignorePaths") or [])])
+
+    def ignores_status(self, status: Any) -> bool:
+        """Whether a response status is ignored (``200``, ``2xx``, ``301-304``), locally or from the console."""
+        patterns = [*self.ignore_statuses, *(self.remote.get("ignoreStatuses") or [])]
+        return any(status_match(str(p), str(status)) for p in patterns)
 
     def redactor(self) -> Redactor:
         return Redactor([*self.redact_keys, *(self.remote.get("redactKeys") or [])])
@@ -234,7 +244,13 @@ class Recorder:
                 batch.status = str(status)
             if name is not None:
                 batch.name = name
-            if self._keep(batch):
+            # An ignored response status drops the request with every entry,
+            # before anything leaves the app.
+            response_status = batch.status
+            if response_status is None and batch.content.get("responseStatus") is not None:
+                response_status = str(batch.content["responseStatus"])
+            ignored = batch.type == "request" and response_status is not None and self.ignores_status(response_status)
+            if not ignored and self._keep(batch):
                 self._enqueue(batch.wire())
         except Exception:  # pragma: no cover
             logger.debug("nexus telescope: could not finish a batch", exc_info=True)

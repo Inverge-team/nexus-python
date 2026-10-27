@@ -4,6 +4,15 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.5.0] — 2026-10-27
+
+- **Telescope: ignore response statuses.** `telescope.init(ignore_statuses=["200",
+  "3xx", "401-403"])` (or `NEXUS_TELESCOPE_IGNORE_STATUSES=200,304`, or
+  `TELESCOPE={"ignore_statuses": [...]}` in Django settings): a request answered
+  with a matching status is never sent, together with every entry it recorded.
+  Merged with the list set in the console (Telescope → Settings), which the SDK
+  now also applies before sending. `recorder.ignores_status(s)`.
+
 ## [1.4.0] — 2026-10-27
 
 - **Nexus Shield** — verify that a request really comes from your app on a real

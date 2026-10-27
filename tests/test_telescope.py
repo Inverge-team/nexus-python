@@ -89,6 +89,24 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(bs[0]["status"], "failed")
         self.assertEqual(bs[0]["parentSpanId"], carrier["__nexusTelescope"].split("-")[2])
 
+    def test_ignored_statuses_are_never_sent(self):
+        tel, t = make(ignore_statuses=["200", 401])
+        rec = tel.recorder
+        rec.remote = {"ignoreStatuses": ["3xx"]}
+        for status in (200, 401, 302, 404):
+            batch = rec.begin("request", {"uri": f"/{status}"})
+            token = rec.activate(batch)
+            tel.query("select 1", [], 0.1, "postgresql")
+            rec.end(batch, {"responseStatus": status}, str(status))
+            rec.deactivate(token)
+        with tel.command("reports:send"):
+            pass
+        bs = batches(t)
+        self.assertEqual([b["content"].get("responseStatus") for b in bs if b["type"] == "request"], [404])
+        self.assertEqual(len([b for b in bs if b["type"] == "command"]), 1, "only requests are filtered")
+        self.assertTrue(rec.ignores_status("304"))
+        self.assertFalse(rec.ignores_status("ok"))
+
     def test_switch_off(self):
         import os
 
