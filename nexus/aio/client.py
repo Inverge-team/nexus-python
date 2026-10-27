@@ -44,6 +44,7 @@ from .resources import (
     AsyncSessions,
     AsyncSurveys,
     AsyncVoice,
+    AsyncShield,
 )
 
 __all__ = ["AsyncNexusClient"]
@@ -107,6 +108,7 @@ class AsyncNexusClient:
         self.live_activities = AsyncLiveActivities(self)
         self.replay = AsyncReplay(self)
         self.voice = AsyncVoice(self)
+        self.shield = AsyncShield(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 

@@ -818,3 +818,12 @@ def voice_conference_mute(leg_id: str, muted: bool) -> Request:
 
 def voice_conference_remove(session_id: str, leg_id: str) -> Request:
     return Request("POST", "/partner/voice/conference/remove", {"sessionId": session_id, "legId": leg_id})
+
+
+# ── Shield (app & device integrity) ──────────────────────────────────────────
+
+
+def shield_verify(fields: Mapping[str, Any]) -> Request:
+    # Never retried: verify burns the proof's jti, so a retry of a request that
+    # did reach the server would come back as `proof_replayed`.
+    return Request("POST", "/partner/shield/verify", compact(fields))

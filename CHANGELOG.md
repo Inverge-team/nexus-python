@@ -4,6 +4,18 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## 1.4.0
+
+- **Nexus Shield** — verify that a request really comes from your app on a real
+  device. `client.shield.verify_request(headers=…, method=…, url=…, body=…,
+  resource="checkout")` reads the `X-Nexus-Shield` + `DPoP` headers your app
+  sent, binds the raw body, and returns a `ShieldVerdict` (`allowed`, `reason`,
+  `score`, `level`, `providers`, `device_id`, …). Replay protection, blocked
+  devices and the resource's console policy are applied by Nexus. Also
+  `client.shield.verify(token, proof, method, url, …)` and the async twins.
+  Never retried (a retry would see its own proof as replayed). New switch
+  `NEXUS_SHIELD_ENABLED`.
+
 ## [1.3.0] — 2026-10-25
 
 ### Added

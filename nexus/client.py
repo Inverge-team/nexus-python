@@ -40,6 +40,7 @@ from .resources import (
     RemoteConfig,
     Replay,
     Sessions,
+    Shield,
     Surveys,
     Voice,
 )
@@ -121,6 +122,7 @@ class NexusClient:
         self.live_activities = LiveActivities(self)
         self.replay = Replay(self)
         self.voice = Voice(self)
+        self.shield = Shield(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 

@@ -25,6 +25,8 @@ from ..models import FlagEvaluation, RemoteConfigSnapshot
 from ..resources.base import to_wire_context
 from ..resources.errors import stack_frames
 from ..resources.remote_config import infer_value_type
+from ..resources.shield import ShieldVerdict, shield_fields
+from ..resources.shield import body_hash as compute_body_hash
 from ..resources.voice import ENDPOINTS, PRESENCE, ROLES
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -46,6 +48,7 @@ __all__ = [
     "AsyncLiveActivities",
     "AsyncReplay",
     "AsyncVoice",
+    "AsyncShield",
 ]
 
 
@@ -1087,3 +1090,37 @@ class AsyncVoice(AsyncResource):
         return "{0}/partner/voice/recordings/download?{1}".format(
             self._client.config.http_base, urlencode(query)
         )
+
+
+# ── Shield ───────────────────────────────────────────────────────────────────
+
+
+class AsyncShield(AsyncResource):
+    """``client.shield`` — see :class:`nexus.resources.Shield`."""
+
+    async def verify(
+        self,
+        token: Optional[str],
+        proof: Optional[str],
+        method: str,
+        url: str,
+        resource: Optional[str] = None,
+        body_hash: Optional[str] = None,
+    ) -> ShieldVerdict:
+        res = resource or "*"
+        if not token:
+            return ShieldVerdict.missing(res)
+        data = await self._send(p.shield_verify(shield_fields(token, proof, method, url, resource, body_hash)))
+        return ShieldVerdict.from_response(data, res)
+
+    async def verify_request(
+        self,
+        headers: Mapping[str, Any],
+        method: str,
+        url: str,
+        body: Optional[bytes] = None,
+        resource: Optional[str] = None,
+    ) -> ShieldVerdict:
+        from ..resources.shield import _header
+
+        return await self.verify(_header(headers, "x-nexus-shield"), _header(headers, "dpop"), method, url, resource, compute_body_hash(body))

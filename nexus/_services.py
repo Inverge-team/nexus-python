@@ -37,6 +37,7 @@ SERVICE_ENV: Dict[str, str] = {
     "replay": "NEXUS_REPLAY_ENABLED",
     "voice": "NEXUS_VOICE_ENABLED",
     "telescope": "NEXUS_TELESCOPE_ENABLED",
+    "shield": "NEXUS_SHIELD_ENABLED",
 }
 
 #: The master switch.
@@ -59,6 +60,7 @@ _PATHS: Dict[str, str] = {
     "replay": "replay",
     "voice": "voice",
     "telescope": "telescope",
+    "shield": "shield",
 }
 
 
