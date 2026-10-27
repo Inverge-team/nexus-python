@@ -1,0 +1,203 @@
+name: Release
+
+# Merging dev into main publishes whatever version pyproject.toml declares.
+# The release ritual is therefore: bump the version on dev, merge to main.
+#
+# Re-running on a commit to main that did not change the version is harmless — the
+# workflow notices the version is already on PyPI and skips the upload rather than
+# failing, because a version on PyPI can never be replaced.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two overlapping publishes of the same version would race on the tag and on PyPI.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Read the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      already: ${{ steps.published.outputs.already }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Read the version
+        id: version
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read [project].version from pyproject.toml."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # PEP 440 pre-releases: 1.6.0a1, 1.6.0b2, 1.6.0rc1, 1.6.0.dev3
+          if echo "$VERSION" | grep -Eq '(a|b|rc|\.dev)[0-9]+'; then
+            echo "prerelease=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Releasing $VERSION"
+
+      - name: Has this version already been published?
+        id: published
+        run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/inverge-nexus/$VERSION/json")
+          if [ "$CODE" = "200" ]; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::inverge-nexus $VERSION is already on PyPI — skipping the publish."
+            echo "A published version can never be replaced. Bump the version on dev to release again."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Nothing untested gets published: every Python the package claims to support.
+  # The official python images are used instead of setup-python because hosted
+  # runners stop shipping interpreters that have reached end of life (3.8), and
+  # 3.8 deployments are exactly who a server SDK still has to reach.
+  test:
+    name: Test (Python ${{ matrix.python }})
+    needs: version
+    if: needs.version.outputs.already == 'false'
+    runs-on: ubuntu-latest
+    container: python:${{ matrix.python }}-slim
+    strategy:
+      fail-fast: true
+      matrix:
+        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Test
+        env:
+          PYTHONPATH: .:tests
+        run: python -m unittest discover -s tests -t . -v
+
+  build:
+    name: Build distributions
+    needs: [version, test]
+    if: needs.version.outputs.already == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build the sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check --strict dist/*
+
+      - name: The built version matches pyproject.toml
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ls dist/
+          ls dist/inverge_nexus-"$VERSION"-*.whl dist/inverge_nexus-"$VERSION".tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ needs.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+  # Trusted Publishing (OIDC): PyPI trusts this workflow + environment, so there is
+  # no API token to leak or rotate. id-token is granted to this job alone — the one
+  # that does nothing but upload — as PyPA recommends.
+  publish:
+    name: Publish to PyPI
+    needs: [version, build]
+    if: needs.version.outputs.already == 'false'
+    runs-on: ubuntu-latest
+
+    # Must match the environment name configured on the PyPI trusted publisher.
+    # It is also where you add required reviewers if you later want a human to
+    # approve each publish.
+    environment:
+      name: release
+      url: https://pypi.org/project/inverge-nexus/${{ needs.version.outputs.version }}/
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.version.outputs.version }}
+          path: dist
+
+      - name: Upload
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://upload.pypi.org/legacy/   # pypi.org (not TestPyPI)
+          # A run interrupted after the upload can be re-run without a conflict.
+          skip-existing: true
+
+  github-release:
+    name: Tag and create the GitHub Release
+    needs: [version, publish]
+    if: needs.version.outputs.already == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.version.outputs.version }}
+          path: dist
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1 || gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG already exists — leaving it alone."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Nexus Python SDK $VERSION"
+          git push origin "$TAG"
+
+          {
+            printf 'Published to PyPI: https://pypi.org/project/inverge-nexus/%s/\n\n' "$VERSION"
+            printf '```bash\npip install inverge-nexus==%s\n```\n\n' "$VERSION"
+            printf 'See [CHANGELOG.md](https://github.com/Inverge-team/nexus-python/blob/main/CHANGELOG.md).\n'
+          } > release-notes.md
+
+          FLAG=""
+          if [ "$PRERELEASE" = "true" ]; then FLAG="--prerelease"; fi
+
+          gh release create "$TAG" $FLAG \
+            --title "Nexus Python SDK $VERSION" \
+            --notes-file release-notes.md \
+            dist/*
