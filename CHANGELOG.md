@@ -4,7 +4,7 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
-## 1.4.0
+## [1.4.0] — 2026-10-27
 
 - **Nexus Shield** — verify that a request really comes from your app on a real
   device. `client.shield.verify_request(headers=…, method=…, url=…, body=…,
