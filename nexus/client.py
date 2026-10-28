@@ -16,7 +16,7 @@ reuse it; the integrations in :mod:`nexus.integrations` do that for you.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Union
 
 from . import _services
 from . import _payloads as p
@@ -46,6 +46,9 @@ from .resources import (
 )
 from .transport import Transport
 
+if TYPE_CHECKING:  # pragma: no cover
+    from .resources.docstore import DocStore
+
 __all__ = ["NexusClient"]
 
 
@@ -74,8 +77,8 @@ class NexusClient:
             config = api_key
             api_key = None
         if config is None:
-            # Explicit options layered over NEXUS_* — so NEXUS_BASE_URL can
-            # repoint a deploy even when the key is passed in code.
+            # Explicit options layered over NEXUS_* — settings not passed in
+            # code still come from the environment.
             config = NexusConfig.create(api_key, **options)
         elif options:
             config = config.with_(**options)
@@ -190,6 +193,16 @@ class NexusClient:
         resolved.update(ctx.current().wire())
         resolved.update({k: v for k, v in overrides.items() if v is not None})
         return resolved
+
+    def docstore(self, *, service_key: Optional[str] = None, token: Optional[str] = None) -> "DocStore":
+        """Nexus DocStore. With a service key (``service_key=`` or
+        ``NEXUS_DOCSTORE_SERVICE_KEY``) security rules are bypassed — server
+        use only; with ``token`` (an end user's JWT) rules apply as that user.
+        Without either, calls are anonymous. ``.as_user(token)`` switches later."""
+        from .resources.docstore import DocStore
+        from .resources.docstore import default_service_key
+
+        return DocStore(self, service_key=default_service_key(service_key), token=token)
 
     # ── delivery ─────────────────────────────────────────────────────────────
 

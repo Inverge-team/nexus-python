@@ -77,6 +77,10 @@ class _EngineBase:
         )
 
     def _should_retry(self, response: RawResponse) -> bool:
+        # A usage cap set in the console is a 429 too, but waiting won't lift
+        # it before next month — report it at once instead of backing off.
+        if response.status == 429 and b"usage_limit_exceeded" in response.body:
+            return False
         return response.status in RETRY_STATUSES
 
 

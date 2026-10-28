@@ -827,3 +827,84 @@ def shield_verify(fields: Mapping[str, Any]) -> Request:
     # Never retried: verify burns the proof's jti, so a retry of a request that
     # did reach the server would come back as `proof_replayed`.
     return Request("POST", "/partner/shield/verify", compact(fields))
+
+
+# ── DocStore (document database) ─────────────────────────────────────────────
+# Auth is per call, not per client: the `headers` carry either the Databases
+# service key (rules bypassed) or an end user's bearer token (rules apply).
+# Reads are retried; writes are not (an `$inc` must never apply twice).
+
+
+def _ds(path: str) -> str:
+    return "/partner/docstore" + path
+
+
+def _ds_doc(collection: str, doc_id: str) -> str:
+    return _ds("/collections/{0}/docs/{1}".format(_seg(collection), _seg(doc_id)))
+
+
+def _qs(params: Mapping[str, Any]) -> str:
+    from urllib.parse import urlencode
+
+    clean = {k: v for k, v in params.items() if v is not None}
+    return "?" + urlencode(clean) if clean else ""
+
+
+def docstore_get(collection: str, doc_id: str, headers: Mapping[str, str], *, expand: Optional[Sequence[str]] = None, select: Optional[Sequence[str]] = None, as_of: Optional[str] = None) -> Request:
+    query = _qs({"expand": ",".join(expand) if expand else None, "select": ",".join(select) if select else None, "asOf": as_of})
+    return Request("GET", _ds_doc(collection, doc_id) + query, None, headers, retry=True)
+
+
+def docstore_query(collection: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> Request:
+    return Request("POST", _ds("/collections/{0}/query".format(_seg(collection))), compact(body), headers, retry=True)
+
+
+def docstore_aggregate(collection: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> Request:
+    return Request("POST", _ds("/collections/{0}/aggregate".format(_seg(collection))), compact(body), headers, retry=True)
+
+
+def docstore_create(collection: str, data: Mapping[str, Any], headers: Mapping[str, str], doc_id: Optional[str] = None) -> Request:
+    return Request("POST", _ds("/collections/{0}/docs".format(_seg(collection))), compact({"id": doc_id, "data": dict(data)}), headers)
+
+
+def docstore_set(collection: str, doc_id: str, data: Mapping[str, Any], headers: Mapping[str, str], *, merge: bool = False, if_version: Optional[int] = None) -> Request:
+    body = compact({"data": dict(data), "merge": True if merge else None, "precondition": {"version": if_version} if if_version is not None else None})
+    return Request("PUT", _ds_doc(collection, doc_id), body, headers)
+
+
+def docstore_update(collection: str, doc_id: str, update: Mapping[str, Any], headers: Mapping[str, str], *, if_version: Optional[int] = None, upsert: bool = False) -> Request:
+    body = compact({"update": dict(update), "upsert": True if upsert else None, "precondition": {"version": if_version} if if_version is not None else None})
+    return Request("PATCH", _ds_doc(collection, doc_id), body, headers)
+
+
+def docstore_delete(collection: str, doc_id: str, headers: Mapping[str, str], *, if_version: Optional[int] = None) -> Request:
+    return Request("DELETE", _ds_doc(collection, doc_id) + _qs({"ifVersion": if_version}), None, headers)
+
+
+def docstore_commit(operations: Sequence[Mapping[str, Any]], headers: Mapping[str, str], *, mode: Optional[str] = None) -> Request:
+    return Request("POST", _ds("/commit"), compact({"operations": [dict(o) for o in operations], "mode": mode}), headers)
+
+
+def docstore_history(collection: str, doc_id: str, headers: Mapping[str, str], *, limit: Optional[int] = None, before_version: Optional[int] = None) -> Request:
+    return Request("GET", _ds_doc(collection, doc_id) + "/history" + _qs({"limit": limit, "beforeVersion": before_version}), None, headers, retry=True)
+
+
+def docstore_restore(collection: str, doc_id: str, version: int, headers: Mapping[str, str]) -> Request:
+    return Request("POST", _ds_doc(collection, doc_id) + "/restore", {"version": int(version)}, headers)
+
+
+def docstore_restore_collection(collection: str, as_of: str, headers: Mapping[str, str], *, dry_run: bool = False) -> Request:
+    return Request("POST", _ds("/collections/{0}/restore".format(_seg(collection))), {"asOf": as_of, "dryRun": bool(dry_run)}, headers)
+
+
+def docstore_changes(headers: Mapping[str, str], *, since: int = 0, collections: Optional[Sequence[str]] = None, limit: Optional[int] = None) -> Request:
+    query = _qs({"since": int(since), "collections": ",".join(collections) if collections else None, "limit": limit})
+    return Request("GET", _ds("/changes") + query, None, headers, retry=True)
+
+
+def docstore_deploy_collection(name: str, config: Mapping[str, Any], headers: Mapping[str, str]) -> Request:
+    return Request("PUT", _ds("/collections/{0}".format(_seg(name))), dict(config), headers, retry=True)
+
+
+def docstore_list_collections(headers: Mapping[str, str]) -> Request:
+    return Request("GET", _ds("/collections"), None, headers, retry=True)

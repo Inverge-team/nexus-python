@@ -18,7 +18,7 @@ coroutine. Build one client per process and close it on shutdown.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Union
 
 from .. import _services
 from .. import _payloads as p
@@ -46,6 +46,9 @@ from .resources import (
     AsyncVoice,
     AsyncShield,
 )
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .docstore import AsyncDocStore
 
 __all__ = ["AsyncNexusClient"]
 
@@ -165,6 +168,16 @@ class AsyncNexusClient:
         return resolved
 
     # ── delivery ─────────────────────────────────────────────────────────────
+
+    def docstore(self, *, service_key: Optional[str] = None, token: Optional[str] = None) -> "AsyncDocStore":
+        """Nexus DocStore. With a service key (``service_key=`` or
+        ``NEXUS_DOCSTORE_SERVICE_KEY``) security rules are bypassed — server
+        use only; with ``token`` (an end user's JWT) rules apply as that user.
+        Without either, calls are anonymous. ``.as_user(token)`` switches later."""
+        from .docstore import AsyncDocStore
+        from ..resources.docstore import default_service_key
+
+        return AsyncDocStore(self, service_key=default_service_key(service_key), token=token)
 
     async def request(self, request: p.Request) -> Any:
         """Execute one partner-API request (raises unless ``silent``)."""
