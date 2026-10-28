@@ -35,6 +35,7 @@ on the documentation site:
 - **[Shield](https://docs.inverge.net/products/shield/verify)** — verify a request really comes from your app on a real device.
 - **[Telescope](https://docs.inverge.net/products/telescope/python)** — request-journey tracing for requests, Celery tasks and commands,
   with N+1, duplicate and slow queries flagged.
+- **[DocStore](https://docs.inverge.net/sdks/python/reference/docstore)** — the document database: queries, transactions, history, change stream and webhook verification (sync and asyncio).
 
 ## Links
 

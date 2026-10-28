@@ -4,6 +4,37 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.6.0] — 2026-10-28
+
+### Added
+- **Nexus DocStore** — the document database. `client.docstore()` (service key
+  from `NEXUS_DOCSTORE_SERVICE_KEY` or `service_key=`, rules bypassed) and
+  `.as_user(jwt)` (security rules apply as that end user); same API on
+  `AsyncNexusClient.docstore()` with `await`.
+  - Refs and queries: `collection().doc().get/set/update/delete`, `add()`,
+    `where(field, op, value)`, `or_/and_/not_/where_related`, `order_by`,
+    `limit`, keyset `start_after`, `select`, `expand`, `search`, `as_of`,
+    `with_count`, `stream()`, `count()`, `aggregate(..., group_by=)`.
+  - Field values (`nexus.docstore`): `increment`, `multiply`, `minimum`,
+    `maximum`, `array_union`, `array_remove`, `array_push(keep_last=)`,
+    `server_timestamp`, `delete_field`, `merge_field`.
+  - `batch()` (also a context manager), `run_transaction(fn)` (optimistic,
+    retried on a race), `if_version` preconditions, `history()`, `restore()`,
+    whole-collection `restore(as_of, dry_run=)`.
+  - `changes()` / `watch_changes(since=)` — resumable change stream (CDC).
+  - `deploy_collection(name, config)` / `list_collections()` — collections as code.
+  - `verify_webhook(body, headers, secret)` for DocStore trigger webhooks.
+  - New `ConflictError` (409, `is_precondition_failed`) and
+    `ServiceDisabledError`. DocStore calls always raise (also with
+    `silent=True`) and always run synchronously, even with a background
+    dispatcher. `NEXUS_DOCSTORE_ENABLED=false` makes them raise
+    `ServiceDisabledError` without a request.
+
+### Changed
+- A `429` whose error code is `usage_limit_exceeded` (a usage limit set in the
+  console was reached) is raised at once instead of retried — waiting cannot
+  lift it before next month. Other `429`s still back off and retry.
+
 ## [1.5.0] — 2026-10-27
 
 - **Telescope: ignore response statuses.** `telescope.init(ignore_statuses=["200",

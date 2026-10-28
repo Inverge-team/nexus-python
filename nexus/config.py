@@ -243,10 +243,9 @@ class NexusConfig:
     ) -> "NexusConfig":
         """Explicit options layered over the ``NEXUS_*`` environment.
 
-        This is what the clients use, and it is why ``NEXUS_BASE_URL=...`` can
-        point a staging deploy at a different backend even though the API key
-        is passed in code. Precedence, lowest first: environment → ``options``
-        → ``api_key``.
+        This is what the clients use: settings you don't pass in code (a
+        timeout, retries, batching) can still come from the environment.
+        Precedence, lowest first: environment → ``options`` → ``api_key``.
         """
         env = os.environ if environ is None else environ
         values: Dict[str, Any] = {}

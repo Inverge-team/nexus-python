@@ -26,6 +26,8 @@ __all__ = [
     "NotFoundError",
     "ValidationError",
     "RateLimitError",
+    "ConflictError",
+    "ServiceDisabledError",
     "ServerError",
     "api_error_for",
 ]
@@ -100,6 +102,25 @@ class ValidationError(ApiError):
     """400/422 — the request body failed server-side validation."""
 
 
+class ConflictError(ApiError):
+    """409 — the write conflicts with the current state: a DocStore version
+    precondition failed (:attr:`is_precondition_failed`), a unique constraint
+    was violated, or a document already exists."""
+
+    @property
+    def is_precondition_failed(self) -> bool:
+        return isinstance(self.details, Mapping) and self.details.get("reason") == "precondition_failed"
+
+
+class ServiceDisabledError(NexusError):
+    """The product is switched off (``NEXUS_<SERVICE>_ENABLED=false`` / ``services=``).
+
+    Most services turn into silent no-ops when switched off; DocStore raises
+    this instead, because a database read that quietly returns nothing looks
+    exactly like missing data.
+    """
+
+
 class RateLimitError(ApiError):
     """429 — too many requests. :attr:`retry_after` is in seconds when sent."""
 
@@ -117,6 +138,7 @@ _STATUS_MAP = {
     401: AuthenticationError,
     403: PermissionDeniedError,
     404: NotFoundError,
+    409: ConflictError,
     422: ValidationError,
     429: RateLimitError,
 }
