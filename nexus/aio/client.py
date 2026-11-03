@@ -45,6 +45,7 @@ from .resources import (
     AsyncSurveys,
     AsyncVoice,
     AsyncShield,
+    AsyncMessaging,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -112,6 +113,7 @@ class AsyncNexusClient:
         self.replay = AsyncReplay(self)
         self.voice = AsyncVoice(self)
         self.shield = AsyncShield(self)
+        self.messaging = AsyncMessaging(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 
@@ -179,13 +181,19 @@ class AsyncNexusClient:
 
         return AsyncDocStore(self, service_key=default_service_key(service_key), token=token)
 
-    async def request(self, request: p.Request) -> Any:
-        """Execute one partner-API request (raises unless ``silent``)."""
+    async def request(self, request: p.Request, *, direct: bool = False) -> Any:
+        """Execute one partner-API request (raises unless ``silent``).
+
+        ``direct=True`` raises whatever ``silent`` says (messaging: a failed
+        send must not look like success).
+        """
         if self._switched_off(request.path):
             return None
         if self._closed:
             logger.warning("nexus: request after aclose() — %s %s", request.method, request.path)
             return None
+        if direct:
+            return await self.engine.execute(request)
         try:
             return await self.engine.execute(request)
         except NexusError as exc:

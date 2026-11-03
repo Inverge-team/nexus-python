@@ -35,6 +35,7 @@ from .resources import (
     Links,
     LiveActivities,
     Logs,
+    Messaging,
     Push,
     Realtime,
     RemoteConfig,
@@ -126,6 +127,7 @@ class NexusClient:
         self.replay = Replay(self)
         self.voice = Voice(self)
         self.shield = Shield(self)
+        self.messaging = Messaging(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 
@@ -206,18 +208,25 @@ class NexusClient:
 
     # ── delivery ─────────────────────────────────────────────────────────────
 
-    def request(self, request: p.Request) -> Any:
+    def request(self, request: p.Request, *, direct: bool = False) -> Any:
         """Execute one partner-API request.
 
         Raises a :class:`~nexus.exceptions.NexusError` subclass on failure,
         unless the client is configured ``silent=True`` — then it logs and
         returns ``None``.
+
+        ``direct=True`` runs it now on this thread whatever the dispatcher, and
+        raises whatever ``silent`` says — for calls whose result the caller
+        needs (a sent message's id), whose body a queue cannot carry (a file
+        upload), and whose failure must not look like success (a send).
         """
         if self._switched_off(request.path):
             return None
         if self._closed:
             logger.warning("nexus: request after close() — %s %s", request.method, request.path)
             return None
+        if direct:
+            return self.engine.execute(request)
         try:
             return self.dispatcher.dispatch(request)
         except NexusError as exc:
@@ -296,9 +305,10 @@ class NexusClient:
         """A sibling client that delivers through a different dispatcher.
 
         The two share nothing but configuration, so buffering and shutdown stay
-        independent.
+        independent. The transport is shared too, so a direct call from the
+        sibling (messaging) goes through the same one the dispatcher uses.
         """
-        return NexusClient(config=self.config, dispatcher=dispatcher)
+        return NexusClient(config=self.config, dispatcher=dispatcher, transport=self.engine.transport)
 
     def background(self, *, workers: int = 1) -> "NexusClient":
         """A sibling client where **every** call is fire-and-forget.

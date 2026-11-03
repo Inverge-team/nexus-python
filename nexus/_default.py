@@ -59,6 +59,7 @@ RESOURCE_NAMES = (
     "live_activities",
     "replay",
     "voice",
+    "messaging",
 )
 
 

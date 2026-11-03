@@ -27,6 +27,7 @@ from ..resources.errors import stack_frames
 from ..resources.remote_config import infer_value_type
 from ..resources.shield import ShieldVerdict, shield_fields
 from ..resources.shield import body_hash as compute_body_hash
+from ..resources.messaging import FileInput, message_fields, new_idempotency_key, read_file, verification_fields
 from ..resources.voice import ENDPOINTS, PRESENCE, ROLES
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -1124,3 +1125,57 @@ class AsyncShield(AsyncResource):
         from ..resources.shield import _header
 
         return await self.verify(_header(headers, "x-nexus-shield"), _header(headers, "dpop"), method, url, resource, compute_body_hash(body))
+
+
+# ── Messaging ────────────────────────────────────────────────────────────────
+
+
+class _AsyncDirect(AsyncResource):
+    async def _send(self, request: p.Request) -> Any:
+        return await self._client.request(request, direct=True)
+
+
+class AsyncVerifications(_AsyncDirect):
+    """``client.messaging.verifications`` — see :class:`nexus.resources.messaging.Verifications`."""
+
+    async def start(self, to: str, **options: Any) -> Optional[Dict[str, Any]]:
+        return await self._send(p.verification_start(verification_fields(to, **options)))
+
+    async def check(self, verification_id: str, code: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.verification_check(verification_id, code))
+
+    async def get(self, verification_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.verification_get(verification_id))
+
+    async def cancel(self, verification_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.verification_cancel(verification_id))
+
+
+class AsyncMessaging(_AsyncDirect):
+    """``client.messaging`` — see :class:`nexus.resources.Messaging`."""
+
+    def __init__(self, client: "AsyncNexusClient") -> None:
+        super().__init__(client)
+        self.verifications = AsyncVerifications(client)
+
+    async def send(
+        self, channel: str, to: str, *, idempotency_key: Optional[str] = None, **fields: Any
+    ) -> Optional[Dict[str, Any]]:
+        body = message_fields(channel, to, **fields)
+        return await self._send(p.messaging_send(body, new_idempotency_key(idempotency_key)))
+
+    async def get(self, message_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.messaging_get(message_id))
+
+    async def events(self, message_id: str) -> list:
+        return self._list(await self._send(p.messaging_events(message_id)), "events")
+
+    async def upload_media(
+        self, file: FileInput, *, content_type: Optional[str] = None, filename: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        return await self._send(p.messaging_upload_media(*read_file(file, content_type, filename)))
+
+    async def upload_telegram_file(
+        self, file: FileInput, *, content_type: Optional[str] = None, filename: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        return await self._send(p.messaging_upload_telegram(*read_file(file, content_type, filename)))

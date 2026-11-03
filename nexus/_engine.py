@@ -42,9 +42,9 @@ class _EngineBase:
             "User-Agent": self.config.resolved_user_agent,
         }
         headers.update(self.config.default_headers)
-        headers.update(request.headers)
-        if has_body:
+        if has_body and request.raw is None:
             headers["Content-Type"] = "application/json"
+        headers.update(request.headers)
         return headers
 
     def _attempts(self, request: Request) -> int:
@@ -103,7 +103,7 @@ class HttpEngine(_EngineBase):
 
     def _execute(self, request: Request) -> Any:
         url = self.config.url_for(request.path)
-        body = _encode(request.json)
+        body = request.raw if request.raw is not None else _encode(request.json)
         headers = self._headers(request, body is not None)
         attempts = self._attempts(request)
         last_error: Optional[NexusError] = None
@@ -153,7 +153,7 @@ class AsyncHttpEngine(_EngineBase):
 
     async def _execute(self, request: Request) -> Any:
         url = self.config.url_for(request.path)
-        body = _encode(request.json)
+        body = request.raw if request.raw is not None else _encode(request.json)
         headers = self._headers(request, body is not None)
         attempts = self._attempts(request)
         last_error: Optional[NexusError] = None

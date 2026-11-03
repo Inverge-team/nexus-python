@@ -4,6 +4,26 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.7.0] — 2026-11-04
+
+### Added
+- **Messaging** — send on WhatsApp, Telegram, SMS and the other channels from
+  your backend. `client.messaging.send(channel, to, body=… | template=… |
+  content=…)`, `get()`, `events()`, `upload_media()` (WhatsApp) and
+  `upload_telegram_file()`; OTP codes over Telegram with SMS fallback via
+  `client.messaging.verifications.start/check/get/cancel`. Same API on
+  `AsyncNexusClient` with `await`.
+  - Every send carries an `Idempotency-Key` (generated, or `idempotency_key=`),
+    so it is retried safely; verification start/check are never retried.
+  - Messaging always runs directly, even on a `background()` client (the
+    caller needs the message id, and a queue can't carry an upload), and
+    raises even with `silent=True` — a failed send must not look sent.
+  - New switch: `NEXUS_MESSAGING_ENABLED` / `services={"messaging": False}`.
+
+### Fixed
+- A `with_dispatcher()` / `background()` sibling now shares the parent's
+  transport instead of building its own.
+
 ## [1.6.0] — 2026-10-28
 
 ### Added

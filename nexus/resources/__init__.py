@@ -4,6 +4,7 @@ from .base import Resource
 from .errors import Errors
 from .events import Events
 from .flags import Flags
+from .messaging import Messaging, Verifications
 from .shield import Shield, ShieldVerdict
 from .inapp import InApp
 from .links import Links
@@ -22,6 +23,8 @@ __all__ = [
     "Errors",
     "Events",
     "Flags",
+    "Messaging",
+    "Verifications",
     "Shield",
     "ShieldVerdict",
     "InApp",
