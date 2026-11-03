@@ -39,6 +39,7 @@ SERVICE_ENV: Dict[str, str] = {
     "telescope": "NEXUS_TELESCOPE_ENABLED",
     "shield": "NEXUS_SHIELD_ENABLED",
     "docstore": "NEXUS_DOCSTORE_ENABLED",
+    "messaging": "NEXUS_MESSAGING_ENABLED",
 }
 
 #: The master switch.
@@ -63,6 +64,7 @@ _PATHS: Dict[str, str] = {
     "telescope": "telescope",
     "shield": "shield",
     "docstore": "docstore",
+    "messaging": "messaging",
 }
 
 

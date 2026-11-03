@@ -8,6 +8,15 @@ from typing import Any, Dict, List, Optional
 from nexus.transport import RawResponse, Transport
 
 
+def _json_or_none(body: Optional[bytes]) -> Any:
+    if not body:
+        return None
+    try:
+        return json.loads(body.decode())
+    except (UnicodeDecodeError, ValueError):
+        return None  # a raw upload
+
+
 class FakeTransport(Transport):
     """Records every request; answers from a queue of canned responses."""
 
@@ -35,7 +44,8 @@ class FakeTransport(Transport):
                 "url": url,
                 "path": url.split("://", 1)[-1].split("/", 1)[-1],
                 "headers": dict(headers),
-                "json": json.loads(body.decode()) if body else None,
+                "json": _json_or_none(body),
+                "body": body,
                 "timeout": timeout,
             }
         )

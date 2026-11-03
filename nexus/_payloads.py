@@ -29,6 +29,9 @@ class Request:
     json: Optional[Dict[str, Any]] = None
     headers: Mapping[str, str] = field(default_factory=dict)
     retry: bool = False
+    #: A non-JSON body (a file upload). Sent as-is with the ``Content-Type``
+    #: from ``headers``; ``json`` is ignored when this is set.
+    raw: Optional[bytes] = None
 
 
 def compact(data: Mapping[str, Any]) -> Dict[str, Any]:
@@ -908,3 +911,111 @@ def docstore_deploy_collection(name: str, config: Mapping[str, Any], headers: Ma
 
 def docstore_list_collections(headers: Mapping[str, str]) -> Request:
     return Request("GET", _ds("/collections"), None, headers, retry=True)
+
+
+# ── Messaging ────────────────────────────────────────────────────────────────
+#
+# Send-only by product rule: API keys send messages, read what happened to
+# them, upload a file to attach, and run OTP verifications. Templates, numbers,
+# webhooks, campaigns and the inbox are managed in the console.
+
+_MESSAGE_FIELDS = (
+    "channel",
+    "to",
+    "sender",
+    "body",
+    "content",
+    "templateKey",
+    "templateLocale",
+    "templateVariables",
+    "messageClass",
+    "scheduledAt",
+    "validityPeriodSec",
+    "metadata",
+    "trackLinks",
+    "clientIp",
+)
+
+
+def messaging_send(fields: Mapping[str, Any], idempotency_key: str) -> Request:
+    """Send a message.
+
+    Always carries an ``Idempotency-Key``, so the send is safe to retry: a
+    repeat with the same key returns the first message instead of a second one.
+    """
+    return Request(
+        "POST",
+        "/partner/messaging/messages",
+        compact({k: fields.get(k) for k in _MESSAGE_FIELDS}),
+        headers={"Idempotency-Key": idempotency_key},
+        retry=True,
+    )
+
+
+def messaging_get(message_id: str) -> Request:
+    return Request("GET", "/partner/messaging/messages/" + _seg(message_id), retry=True)
+
+
+def messaging_events(message_id: str) -> Request:
+    return Request("GET", "/partner/messaging/messages/{0}/events".format(_seg(message_id)), retry=True)
+
+
+def messaging_upload_media(data: bytes, content_type: str, filename: Optional[str]) -> Request:
+    """A WhatsApp media upload — raw body, type in ``Content-Type``, name in the query."""
+    path = "/partner/messaging/media"
+    if filename:
+        path += "?filename=" + quote(filename, safe="")
+    return Request("POST", path, headers={"Content-Type": content_type}, raw=bytes(data))
+
+
+def messaging_upload_telegram(data: bytes, content_type: str, filename: Optional[str]) -> Request:
+    """A Telegram file upload; returns an ``uploadId`` (``tgf_…``) to send."""
+    path = "/partner/messaging/telegram/uploads"
+    if filename:
+        path += "?filename=" + quote(filename, safe="")
+    return Request("POST", path, headers={"Content-Type": content_type}, raw=bytes(data))
+
+
+_VERIFICATION_FIELDS = (
+    "to",
+    "codeLength",
+    "ttl",
+    "fallback",
+    "fallbackAfter",
+    "smsSender",
+    "smsTemplate",
+    "senderUsername",
+    "maxAttempts",
+    "metadata",
+)
+
+
+def verification_start(fields: Mapping[str, Any]) -> Request:
+    # Not retried: a repeat would send the user a second code.
+    return Request(
+        "POST",
+        "/partner/messaging/verifications",
+        compact({k: fields.get(k) for k in _VERIFICATION_FIELDS}),
+    )
+
+
+def verification_get(verification_id: str) -> Request:
+    return Request("GET", "/partner/messaging/verifications/" + _seg(verification_id), retry=True)
+
+
+def verification_check(verification_id: str, code: str) -> Request:
+    # Not retried: every check spends one of the user's attempts.
+    return Request(
+        "POST",
+        "/partner/messaging/verifications/{0}/check".format(_seg(verification_id)),
+        {"code": str(code)},
+    )
+
+
+def verification_cancel(verification_id: str) -> Request:
+    return Request(
+        "POST",
+        "/partner/messaging/verifications/{0}/cancel".format(_seg(verification_id)),
+        {},
+        retry=True,
+    )
