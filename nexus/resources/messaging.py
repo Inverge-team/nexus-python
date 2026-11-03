@@ -16,7 +16,7 @@ import mimetypes
 import os
 import uuid
 from datetime import datetime
-from typing import IO, Any, Dict, Mapping, Optional, Tuple, Union
+from typing import IO, Any, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 from .. import _payloads as p
 from .base import Resource
@@ -74,6 +74,9 @@ def message_fields(
 def verification_fields(
     to: str,
     *,
+    channels: Optional[Sequence[str]] = None,
+    whatsapp_template: Optional[str] = None,
+    whatsapp_language: Optional[str] = None,
     code_length: Optional[int] = None,
     ttl: Optional[int] = None,
     sms_fallback: bool = False,
@@ -88,6 +91,9 @@ def verification_fields(
         raise ValueError("verifications.start() requires a phone number in E.164 form.")
     return {
         "to": to,
+        "channels": list(channels) if channels else None,
+        "whatsappTemplate": whatsapp_template,
+        "whatsappLanguage": whatsapp_language,
         "codeLength": code_length,
         "ttl": ttl,
         "fallback": "sms" if sms_fallback else None,
@@ -139,14 +145,18 @@ class _Direct(Resource):
 
 
 class Verifications(_Direct):
-    """``client.messaging.verifications`` — one-time codes over Telegram, with SMS fallback."""
+    """``client.messaging.verifications`` — one-time codes on WhatsApp, then Telegram."""
 
     def start(self, to: str, **options: Any) -> Optional[Dict[str, Any]]:
         """Send a code to ``to`` (E.164). Keep the returned ``id`` to check it.
 
+        The code goes out on WhatsApp first and moves to Telegram when WhatsApp
+        refuses it or hasn't delivered it within ``fallback_after`` seconds.
+        ``channels=["telegram"]`` (or any order) overrides that.
+
         ::
 
-            v = client.messaging.verifications.start("+9647501234567", sms_fallback=True)
+            v = client.messaging.verifications.start("+9647501234567")
         """
         return self._send(p.verification_start(verification_fields(to, **options)))
 

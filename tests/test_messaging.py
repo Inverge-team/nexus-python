@@ -147,6 +147,14 @@ class VerificationsTest(unittest.TestCase):
         self.assertEqual((check["path"], check["json"]), ("partner/messaging/verifications/ver_1/check", {"code": "123456"}))
         self.assertEqual(cancel["path"], "partner/messaging/verifications/ver_1/cancel")
 
+    def test_start_with_a_channel_plan_and_template(self):
+        client, transport = make_client()
+        client.messaging.verifications.start("+9647501234567", channels=("telegram", "whatsapp"), whatsapp_template="acme_login", whatsapp_language="ar")
+        self.assertEqual(
+            transport.last["json"],
+            {"to": "+9647501234567", "channels": ["telegram", "whatsapp"], "whatsappTemplate": "acme_login", "whatsappLanguage": "ar"},
+        )
+
     def test_start_and_check_are_never_retried(self):
         # A retried start sends a second code; a retried check spends an attempt.
         client, transport = make_client(max_retries=3, retry_backoff=0)

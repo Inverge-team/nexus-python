@@ -978,6 +978,9 @@ def messaging_upload_telegram(data: bytes, content_type: str, filename: Optional
 
 _VERIFICATION_FIELDS = (
     "to",
+    "channels",
+    "whatsappTemplate",
+    "whatsappLanguage",
     "codeLength",
     "ttl",
     "fallback",

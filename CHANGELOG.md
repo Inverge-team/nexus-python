@@ -4,6 +4,13 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.7.1] — 2026-11-04
+
+### Added
+- `messaging.verifications.start(..., channels=[...], whatsapp_template=, whatsapp_language=)`:
+  codes now go out on WhatsApp first, then Telegram (the API's new default);
+  `channels` sets the order.
+
 ## [1.7.0] — 2026-11-04
 
 ### Added
