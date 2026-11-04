@@ -145,14 +145,15 @@ class _Direct(Resource):
 
 
 class Verifications(_Direct):
-    """``client.messaging.verifications`` — one-time codes on WhatsApp, then Telegram."""
+    """``client.messaging.verifications`` — one-time codes on WhatsApp or Telegram, cheapest first."""
 
     def start(self, to: str, **options: Any) -> Optional[Dict[str, Any]]:
         """Send a code to ``to`` (E.164). Keep the returned ``id`` to check it.
 
-        The code goes out on WhatsApp first and moves to Telegram when WhatsApp
-        refuses it or hasn't delivered it within ``fallback_after`` seconds.
-        ``channels=["telegram"]`` (or any order) overrides that.
+        The code goes out on whichever of WhatsApp and Telegram is cheaper for
+        the number, and moves to the other when that one refuses it or hasn't
+        delivered it within ``fallback_after`` seconds. ``channels=[...]`` sets
+        the order yourself.
 
         ::
 
