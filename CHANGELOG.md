@@ -8,7 +8,8 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 
 ### Added
 - `messaging.verifications.start(..., channels=[...], whatsapp_template=, whatsapp_language=)`:
-  codes now go out on WhatsApp first, then Telegram (the API's new default);
+  codes now go out on the cheaper of WhatsApp and Telegram for the number first (the API's
+  new default);
   `channels` sets the order.
 
 ## [1.7.0] — 2026-11-04
