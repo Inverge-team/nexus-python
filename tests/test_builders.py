@@ -50,6 +50,92 @@ class PushBuilderTest(unittest.TestCase):
         self.assertEqual(payload["filter"], {"platform": "ios"})
 
 
+    def test_when_and_unless(self):
+        client, _ = make_client()
+        ids = []
+        payload = (
+            client.push.notification()
+            .title("t")
+            .when("https://cdn/a.png", lambda p, url: p.image(url))
+            .when(None, lambda p: p.body("never"))
+            .when(ids, lambda p, v: p.to_users(v), lambda p: p.to_segment("All Clients"))
+            .when(lambda p: True, lambda p: p.data(lazy=1))
+            .unless(False, lambda p: p.ios_badge(1))
+            .to_dict()
+        )
+        self.assertEqual(
+            payload,
+            {
+                "title": "t",
+                "imageUrl": "https://cdn/a.png",
+                "data": {"lazy": 1},
+                "options": {"iosBadge": 1},
+                "segmentIds": ["All Clients"],
+            },
+        )
+
+    def test_empty_optional_values_are_no_ops(self):
+        client, _ = make_client()
+        payload = (
+            client.push.notification().title("t").image(None).body("").to_segment("").to_users(["", "u"]).send_at(None)
+        ).to_dict()
+        self.assertEqual(payload, {"title": "t", "distinctIds": ["u"]})
+
+    def test_send_at_schedules_with_an_absolute_instant(self):
+        from datetime import datetime, timedelta, timezone
+
+        client, transport = make_client()
+        at = datetime(2026, 11, 7, 12, tzinfo=timezone(timedelta(hours=3)))
+        client.push.notification().title("t").to_user("u").name("Morning").schedule(at)
+        body = transport.last["json"]
+        self.assertEqual(body["sendAt"], "2026-11-07T09:00:00Z")
+        self.assertEqual(body["name"], "Morning")
+        with self.assertRaises(ValueError):
+            client.push.notification().send_at(datetime(2026, 11, 7, 9))  # naive
+        with self.assertRaises(ValueError):
+            client.push.notification().send_at("2026-11-07T09:00:00")  # no offset
+        self.assertEqual(client.push.notification().send_at(0).to_dict()["sendAt"], "1970-01-01T00:00:00Z")
+
+    def test_scheduled_and_cancel(self):
+        client, transport = make_client()
+        client.push.scheduled("c/1")
+        self.assertEqual((transport.last["method"], transport.last["path"]), ("GET", "partner/push/scheduled/c%2F1"))
+        client.push.cancel_scheduled("c1")
+        self.assertEqual((transport.last["method"], transport.last["path"]), ("POST", "partner/push/scheduled/c1/cancel"))
+        client.push.schedule(["u"], "2026-11-07T09:00:00Z", title="t")
+        self.assertEqual(transport.last["json"]["sendAt"], "2026-11-07T09:00:00Z")
+
+
+    def test_title_and_body_per_language(self):
+        client, transport = make_client()
+        payload = (
+            client.push.notification()
+            .title({"en": "Your order shipped", "ar": "تم شحن طلبك", "ckb": ""})
+            .body({"en": "Track it in the app", "ar": "", "ckb": "بەدوایدا بچۆ"})
+            .to_user("u1")
+            .to_dict()
+        )
+        self.assertEqual(payload["title"], "Your order shipped")
+        self.assertEqual(payload["defaultLanguage"], "en")
+        self.assertEqual(
+            payload["localizations"],
+            {
+                "en": {"title": "Your order shipped", "body": "Track it in the app"},
+                "ar": {"title": "تم شحن طلبك", "body": "Track it in the app"},
+                "ckb": {"title": "Your order shipped", "body": "بەدوایدا بچۆ"},
+            },
+        )
+        d = client.push.notification().title({"ar": "مرحبا", "ckb": "سڵاو"}).default_language("ckb").to_dict()
+        self.assertEqual((d["title"], d["defaultLanguage"]), ("سڵاو", "ckb"))
+
+        client.push.send(["u1"], title={"en": "Hi", "ar": "مرحبا"})
+        self.assertEqual(transport.last["json"]["localizations"]["ar"], {"title": "مرحبا"})
+        self.assertEqual(transport.last["json"]["title"], "Hi")
+        self.assertEqual(client.push.notification().title("Hi").to_user("u").to_dict(), {"title": "Hi", "distinctIds": ["u"]})
+        with self.assertRaises(ValueError):
+            client.push.notification().title({"en": ""}).to_user("u").send()
+
+
 class LiveActivityBuilderTest(unittest.TestCase):
     def test_start(self):
         client, transport = make_client()

@@ -7,10 +7,10 @@ over FCM / APNs / Web Push.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 
 from .. import _payloads as p
-from ..builders.push import PushBuilder
+from ..builders.push import PushBuilder, _expand_translations
 from .base import Resource
 
 __all__ = ["Push"]
@@ -28,11 +28,12 @@ class Push(Resource):
         distinct_ids: Sequence[str],
         message: Optional[Mapping[str, Any]] = None,
         *,
-        title: Optional[str] = None,
-        body: Optional[str] = None,
+        title: Union[str, Mapping[str, Optional[str]], None] = None,
+        body: Union[str, Mapping[str, Optional[str]], None] = None,
         image_url: Optional[str] = None,
         data: Optional[Mapping[str, Any]] = None,
         options: Optional[Mapping[str, Any]] = None,
+        default_language: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Send to specific users across every device each has registered.
 
@@ -52,6 +53,11 @@ class Push(Resource):
             payload["data"] = dict(data)
         if options is not None:
             payload["options"] = dict(options)
+        if default_language is not None:
+            payload["defaultLanguage"] = default_language
+        if not payload.get("title"):
+            raise ValueError("push.send() requires a title.")
+        payload = _expand_translations(payload)
         if not payload.get("title"):
             raise ValueError("push.send() requires a title.")
         payload["distinctIds"] = list(distinct_ids)
@@ -70,9 +76,10 @@ class Push(Resource):
         for key, value in kwargs.items():
             payload.setdefault(key, value)
         if payload.get("title"):
-            builder.title(str(payload["title"]))
+            builder.title(payload["title"])  # a string or a per-language map
         if payload.get("body"):
-            builder.body(str(payload["body"]))
+            builder.body(payload["body"])
+        builder.default_language(payload.get("default_language") or payload.get("defaultLanguage"))
         if payload.get("image_url") or payload.get("imageUrl"):
             builder.image(str(payload.get("image_url") or payload.get("imageUrl")))
         if payload.get("data"):
@@ -81,12 +88,39 @@ class Push(Resource):
             builder.options(payload["options"])
         return builder.to_segments(segment_ids).send()
 
+    def schedule(
+        self,
+        distinct_ids: Sequence[str],
+        send_at: Any,
+        message: Optional[Mapping[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Deliver to specific users later. ``send_at`` is an aware ``datetime``,
+        epoch seconds or an ISO-8601 string with an offset.
+
+        Returns the scheduled send ``{id, status, scheduledAt, …}`` — keep the
+        ``id`` to check on it (:meth:`scheduled`) or cancel it (:meth:`cancel_scheduled`).
+        """
+        payload = dict(message or {})
+        payload["sendAt"] = p.send_at_value(send_at)
+        return self.send(distinct_ids, payload, **kwargs)
+
     def send_raw(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
         """Send a fully assembled payload (what the builder calls).
 
-        Returns ``{sent, failed, recipients}``.
+        Returns ``{sent, failed, recipients}``, or the scheduled send when the
+        payload carries ``sendAt``.
         """
         return self._dict(self._send(p.push_send(payload)))
+
+    def scheduled(self, scheduled_id: str) -> Dict[str, Any]:
+        """A scheduled send's status — and ``sent``/``failed``/``recipients`` once it fired."""
+        return self._dict(self._send(p.push_scheduled(scheduled_id)))
+
+    def cancel_scheduled(self, scheduled_id: str) -> Dict[str, Any]:
+        """Cancel a scheduled send before it fires. The API answers 409 once it
+        has started sending, 404 for an unknown id."""
+        return self._dict(self._send(p.push_cancel_scheduled(scheduled_id)))
 
     # ── device tokens ────────────────────────────────────────────────────────
 
