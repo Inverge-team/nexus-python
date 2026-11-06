@@ -4,6 +4,24 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.8.0] — 2026-11-06
+
+### Added
+- **Scheduled push**: `send_at(at)` on the push builder (an aware `datetime`, epoch
+  seconds or an ISO-8601 string with an offset; naive times are refused),
+  `schedule(at)`, `name(label)`, and `client.push.schedule(ids, at, …)`.
+  `client.push.scheduled(id)` / `cancel_scheduled(id)` (sync and async).
+- **`when()` / `unless()`** on the push builder (Laravel-style); callbacks take
+  `(builder)` or `(builder, value)`, a callable value is evaluated lazily.
+- **Per-language push**: `title()` / `body()` (and `push.send(title=…, body=…)`)
+  take `{"en": "…", "ar": "…"}`; each device gets its language's, empty
+  translations fall back to the default language, set with
+  `default_language(lang)` (else `en`, else the first given).
+
+### Changed
+- `image(None)` / `body(None)` leave the field unset, and empty ids in
+  `to_users()` / `to_segments()` are ignored.
+
 ## [1.7.1] — 2026-11-04
 
 ### Added

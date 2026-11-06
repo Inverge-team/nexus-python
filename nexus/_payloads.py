@@ -8,7 +8,9 @@ API surface. If an endpoint changes, it changes here and both clients follow.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 from urllib.parse import quote
 
@@ -409,6 +411,38 @@ def surveys_respond(survey_id: str, answers: Optional[Mapping[str, Any]], fields
 
 def push_send(payload: Mapping[str, Any]) -> Request:
     return Request("POST", "/partner/push/send", compact(payload))
+
+
+def push_scheduled(scheduled_id: str) -> Request:
+    return Request("GET", "/partner/push/scheduled/{0}".format(_seg(scheduled_id)), retry=True)
+
+
+def push_cancel_scheduled(scheduled_id: str) -> Request:
+    # Not retried: a retry after a lost reply would 409 on the already-canceled send.
+    return Request("POST", "/partner/push/scheduled/{0}/cancel".format(_seg(scheduled_id)), {})
+
+
+_OFFSET = re.compile(r"(Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
+
+
+def send_at_value(at: Any) -> str:
+    """The ``sendAt`` wire value — always an absolute instant.
+
+    Accepts an aware ``datetime``, epoch seconds, or an ISO-8601 string with an
+    offset. A naive datetime / offset-less string is refused rather than guessed:
+    read in the server's zone it would fire hours off.
+    """
+    if isinstance(at, datetime):
+        if at.tzinfo is None or at.tzinfo.utcoffset(at) is None:
+            raise ValueError("send_at needs a timezone-aware datetime (e.g. datetime.now(timezone.utc)).")
+        return at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    if isinstance(at, bool):
+        raise ValueError("send_at must be a datetime, epoch seconds or an ISO-8601 string.")
+    if isinstance(at, (int, float)):
+        return datetime.fromtimestamp(at, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    if isinstance(at, str) and _OFFSET.search(at.strip()):
+        return at.strip()
+    raise ValueError("send_at needs a timezone offset (e.g. '2026-11-07T09:00:00Z'): {0!r}".format(at))
 
 
 _PUSH_TOKEN_FIELDS = (

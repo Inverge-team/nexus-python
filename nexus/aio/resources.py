@@ -19,7 +19,7 @@ from .. import _payloads as p
 from .._logging import logger
 from .._payloads import RoomMessage
 from ..builders.live_activity import LiveActivityBuilder
-from ..builders.push import PushBuilder
+from ..builders.push import PushBuilder, _expand_translations
 from ..exceptions import NexusError
 from ..models import FlagEvaluation, RemoteConfigSnapshot
 from ..resources.base import to_wire_context
@@ -652,11 +652,12 @@ class AsyncPush(AsyncResource):
         distinct_ids: Sequence[str],
         message: Optional[Mapping[str, Any]] = None,
         *,
-        title: Optional[str] = None,
-        body: Optional[str] = None,
+        title: Union[str, Mapping[str, Optional[str]], None] = None,
+        body: Union[str, Mapping[str, Optional[str]], None] = None,
         image_url: Optional[str] = None,
         data: Optional[Mapping[str, Any]] = None,
         options: Optional[Mapping[str, Any]] = None,
+        default_language: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = dict(message or {})
         if title is not None:
@@ -669,6 +670,11 @@ class AsyncPush(AsyncResource):
             payload["data"] = dict(data)
         if options is not None:
             payload["options"] = dict(options)
+        if default_language is not None:
+            payload["defaultLanguage"] = default_language
+        if not payload.get("title"):
+            raise ValueError("push.send() requires a title.")
+        payload = _expand_translations(payload)
         if not payload.get("title"):
             raise ValueError("push.send() requires a title.")
         payload["distinctIds"] = list(distinct_ids)
@@ -677,8 +683,25 @@ class AsyncPush(AsyncResource):
     async def send_to_user(self, distinct_id: str, message=None, **kw: Any) -> Dict[str, Any]:
         return await self.send([distinct_id], message, **kw)
 
+    async def schedule(
+        self,
+        distinct_ids: Sequence[str],
+        send_at: Any,
+        message: Optional[Mapping[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        payload = dict(message or {})
+        payload["sendAt"] = p.send_at_value(send_at)
+        return await self.send(distinct_ids, payload, **kwargs)
+
     async def send_raw(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
         return self._dict(await self._send(p.push_send(payload)))
+
+    async def scheduled(self, scheduled_id: str) -> Dict[str, Any]:
+        return self._dict(await self._send(p.push_scheduled(scheduled_id)))
+
+    async def cancel_scheduled(self, scheduled_id: str) -> Dict[str, Any]:
+        return self._dict(await self._send(p.push_cancel_scheduled(scheduled_id)))
 
     async def register_token(
         self,

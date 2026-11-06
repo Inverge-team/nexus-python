@@ -1,3 +1,3 @@
 """Single source of truth for the SDK version (kept in sync with pyproject)."""
 
-__version__ = "1.7.1"
+__version__ = "1.8.0"
