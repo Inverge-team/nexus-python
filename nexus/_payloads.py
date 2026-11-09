@@ -34,6 +34,8 @@ class Request:
     #: A non-JSON body (a file upload). Sent as-is with the ``Content-Type``
     #: from ``headers``; ``json`` is ignored when this is set.
     raw: Optional[bytes] = None
+    #: Overrides the client timeout (long-polls wait server-side before answering).
+    timeout: Optional[float] = None
 
 
 def compact(data: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1056,3 +1058,55 @@ def verification_cancel(verification_id: str) -> Request:
         {},
         retry=True,
     )
+
+
+# ── Push Authentication (server routes: an API key granted push_auth.server) ──
+
+
+def _pa(method: str, path: str, json: Optional[Dict[str, Any]] = None, retry: bool = False, timeout: Optional[float] = None) -> Request:
+    return Request(method, "/partner/push-auth" + path, json, retry=retry, timeout=timeout)
+
+
+def push_auth_enrollment(fields: Mapping[str, Any]) -> Request:
+    return _pa("POST", "/enrollments", compact(fields))
+
+
+def push_auth_factors(query: Mapping[str, Any]) -> Request:
+    q = "&".join("%s=%s" % (k, quote(str(v), safe="")) for k, v in query.items() if v is not None)
+    return _pa("GET", "/factors" + ("?" + q if q else ""), retry=True)
+
+
+def push_auth_factor(factor_id: str, action: Optional[str] = None) -> Request:
+    if action is None:
+        return _pa("GET", "/factors/" + _seg(factor_id), retry=True)
+    if action == "revoke":
+        return _pa("DELETE", "/factors/" + _seg(factor_id))
+    return _pa("POST", "/factors/%s/%s" % (_seg(factor_id), action), {})
+
+
+def push_auth_identity(identity: str, unlock: bool = False) -> Request:
+    if unlock:
+        return _pa("POST", "/identities/%s/unlock" % _seg(identity), {})
+    return _pa("GET", "/identities/" + _seg(identity), retry=True)
+
+
+def push_auth_challenge_create(fields: Mapping[str, Any]) -> Request:
+    # Not retried unless the caller passed an idempotency key (a repeat would push twice).
+    return _pa("POST", "/challenges", compact(fields), retry=bool(fields.get("idempotencyKey")))
+
+
+def push_auth_challenge_get(challenge_id: str, wait: int = 0) -> Request:
+    w = max(0, min(30, int(wait)))
+    return _pa("GET", "/challenges/" + _seg(challenge_id) + ("?wait=%d" % w if w else ""), retry=True, timeout=(w + 10.0) if w else None)
+
+
+def push_auth_challenge_complete(challenge_id: str, code: str) -> Request:
+    return _pa("POST", "/challenges/%s/complete" % _seg(challenge_id), {"code": code})
+
+
+def push_auth_challenge_cancel(challenge_id: str) -> Request:
+    return _pa("POST", "/challenges/%s/cancel" % _seg(challenge_id), {})
+
+
+def push_auth_verify_receipt(token: str, consume: bool) -> Request:
+    return _pa("POST", "/tokens/verify", {"token": token, "consume": consume})

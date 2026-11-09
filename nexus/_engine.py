@@ -113,7 +113,7 @@ class HttpEngine(_EngineBase):
                 logger.debug("nexus: retry %d/%d %s %s", attempt, attempts - 1, request.method, request.path)
             try:
                 response = self.transport.send(
-                    request.method, url, headers, body, self.config.timeout
+                    request.method, url, headers, body, request.timeout or self.config.timeout
                 )
             except TransportError as exc:
                 last_error = exc
@@ -161,7 +161,7 @@ class AsyncHttpEngine(_EngineBase):
         for attempt in range(attempts):
             try:
                 response = await self.transport.send(
-                    request.method, url, headers, body, self.config.timeout
+                    request.method, url, headers, body, request.timeout or self.config.timeout
                 )
             except TransportError as exc:
                 last_error = exc
