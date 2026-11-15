@@ -202,6 +202,15 @@ class Messaging(_Direct):
                                   variables={"order_id": "A-91"})
             client.messaging.send("telegram", "@alice", body="Your order shipped")
 
+        ``sender=`` picks which of your connected accounts sends it (omit for the
+        channel's default): WhatsApp — the number in any format or its phone
+        number id; Telegram — the bot's ``@username``; Messenger — the Facebook
+        Page id or name; Instagram — the account id or ``@username``; Viber —
+        the bot's name or URI; SMS — an approved sender ID::
+
+            client.messaging.send("whatsapp", "+9647501234567", sender="+9647700000000",
+                                  template="order_shipped", language="en_US")
+
         Safe to retry: every send carries an idempotency key (pass your own to
         dedupe across processes).
         """
