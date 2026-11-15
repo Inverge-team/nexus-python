@@ -40,6 +40,7 @@ SERVICE_ENV: Dict[str, str] = {
     "shield": "NEXUS_SHIELD_ENABLED",
     "docstore": "NEXUS_DOCSTORE_ENABLED",
     "messaging": "NEXUS_MESSAGING_ENABLED",
+    "push_auth": "NEXUS_PUSH_AUTH_ENABLED",
 }
 
 #: The master switch.
@@ -65,6 +66,7 @@ _PATHS: Dict[str, str] = {
     "shield": "shield",
     "docstore": "docstore",
     "messaging": "messaging",
+    "push-auth": "push_auth",
 }
 
 

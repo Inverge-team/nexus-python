@@ -28,6 +28,7 @@ from ..resources.remote_config import infer_value_type
 from ..resources.shield import ShieldVerdict, shield_fields
 from ..resources.shield import body_hash as compute_body_hash
 from ..resources.messaging import FileInput, message_fields, new_idempotency_key, read_file, verification_fields
+from ..resources.push_auth import challenge_fields
 from ..resources.voice import ENDPOINTS, PRESENCE, ROLES
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -1202,3 +1203,58 @@ class AsyncMessaging(_AsyncDirect):
         self, file: FileInput, *, content_type: Optional[str] = None, filename: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         return await self._send(p.messaging_upload_telegram(*read_file(file, content_type, filename)))
+
+
+class AsyncPushAuth(_AsyncDirect):
+    """``client.push_auth`` — see :class:`nexus.resources.PushAuth`."""
+
+    async def create_enrollment(self, identity: str, *, friendly_name: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None, ttl_seconds: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_enrollment({"identity": identity, "friendlyName": friendly_name, "metadata": metadata, "ttlSeconds": ttl_seconds}))
+
+    async def list_factors(self, identity: Optional[str] = None, *, status: Optional[str] = None, limit: Optional[int] = None) -> list:
+        return list(await self._send(p.push_auth_factors({"identity": identity, "status": status, "limit": limit})) or [])
+
+    async def get_factor(self, factor_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_factor(factor_id))
+
+    async def revoke_factor(self, factor_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_factor(factor_id, "revoke"))
+
+    async def lock_factor(self, factor_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_factor(factor_id, "lock"))
+
+    async def unlock_factor(self, factor_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_factor(factor_id, "unlock"))
+
+    async def get_identity(self, identity: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_identity(identity))
+
+    async def unlock_identity(self, identity: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_identity(identity, unlock=True))
+
+    async def create_challenge(self, identity: str, message: str, **options: Any) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_challenge_create(challenge_fields(identity, message, **options)))
+
+    async def get_challenge(self, challenge_id: str, *, wait: int = 0) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_challenge_get(challenge_id, wait))
+
+    async def wait_for_challenge(self, challenge_id: str, *, timeout_seconds: float = 3600, until_stage: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        import time as _time
+
+        deadline = _time.time() + timeout_seconds
+        c = await self.get_challenge(challenge_id)
+        while c and c.get("status") == "pending" and (until_stage is None or c.get("stage") != until_stage):
+            left = deadline - _time.time()
+            if left <= 0:
+                break
+            c = await self.get_challenge(challenge_id, wait=int(min(25, max(1, left))))
+        return c
+
+    async def complete(self, challenge_id: str, code: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_challenge_complete(challenge_id, code))
+
+    async def cancel(self, challenge_id: str) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_challenge_cancel(challenge_id))
+
+    async def verify_receipt(self, token: str, *, consume: bool = True) -> Optional[Dict[str, Any]]:
+        return await self._send(p.push_auth_verify_receipt(token, consume))

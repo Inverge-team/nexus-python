@@ -77,6 +77,7 @@ def verification_fields(
     channels: Optional[Sequence[str]] = None,
     whatsapp_template: Optional[str] = None,
     whatsapp_language: Optional[str] = None,
+    whatsapp_sender: Optional[str] = None,
     code_length: Optional[int] = None,
     ttl: Optional[int] = None,
     sms_fallback: bool = False,
@@ -94,6 +95,7 @@ def verification_fields(
         "channels": list(channels) if channels else None,
         "whatsappTemplate": whatsapp_template,
         "whatsappLanguage": whatsapp_language,
+        "whatsappSender": whatsapp_sender,
         "codeLength": code_length,
         "ttl": ttl,
         "fallback": "sms" if sms_fallback else None,
@@ -158,6 +160,9 @@ class Verifications(_Direct):
         ::
 
             v = client.messaging.verifications.start("+9647501234567")
+
+        ``whatsapp_sender=`` picks which of your WhatsApp numbers sends it (the
+        number in any format, or its phone number id).
         """
         return self._send(p.verification_start(verification_fields(to, **options)))
 
@@ -201,6 +206,15 @@ class Messaging(_Direct):
                                   template="order_shipped", language="en_US",
                                   variables={"order_id": "A-91"})
             client.messaging.send("telegram", "@alice", body="Your order shipped")
+
+        ``sender=`` picks which of your connected accounts sends it (omit for the
+        channel's default): WhatsApp — the number in any format or its phone
+        number id; Telegram — the bot's ``@username``; Messenger — the Facebook
+        Page id or name; Instagram — the account id or ``@username``; Viber —
+        the bot's name or URI; SMS — an approved sender ID::
+
+            client.messaging.send("whatsapp", "+9647501234567", sender="+9647700000000",
+                                  template="order_shipped", language="en_US")
 
         Safe to retry: every send carries an idempotency key (pass your own to
         dedupe across processes).

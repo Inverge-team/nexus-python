@@ -36,6 +36,7 @@ from .resources import (
     LiveActivities,
     Logs,
     Messaging,
+    PushAuth,
     Push,
     Realtime,
     RemoteConfig,
@@ -128,6 +129,7 @@ class NexusClient:
         self.voice = Voice(self)
         self.shield = Shield(self)
         self.messaging = Messaging(self)
+        self.push_auth = PushAuth(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 

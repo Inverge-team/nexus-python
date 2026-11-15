@@ -11,6 +11,7 @@ from .links import Links
 from .live_activities import LiveActivities
 from .logs import Logs
 from .push import Push
+from .push_auth import PushAuth
 from .realtime import Realtime
 from .remote_config import RemoteConfig
 from .replay import Replay
@@ -32,6 +33,7 @@ __all__ = [
     "LiveActivities",
     "Logs",
     "Push",
+    "PushAuth",
     "Realtime",
     "RemoteConfig",
     "Replay",

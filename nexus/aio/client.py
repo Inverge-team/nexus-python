@@ -46,6 +46,7 @@ from .resources import (
     AsyncVoice,
     AsyncShield,
     AsyncMessaging,
+    AsyncPushAuth,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -114,6 +115,7 @@ class AsyncNexusClient:
         self.voice = AsyncVoice(self)
         self.shield = AsyncShield(self)
         self.messaging = AsyncMessaging(self)
+        self.push_auth = AsyncPushAuth(self)
 
     # ── identity ─────────────────────────────────────────────────────────────
 
