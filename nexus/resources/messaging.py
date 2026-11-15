@@ -77,6 +77,7 @@ def verification_fields(
     channels: Optional[Sequence[str]] = None,
     whatsapp_template: Optional[str] = None,
     whatsapp_language: Optional[str] = None,
+    whatsapp_sender: Optional[str] = None,
     code_length: Optional[int] = None,
     ttl: Optional[int] = None,
     sms_fallback: bool = False,
@@ -94,6 +95,7 @@ def verification_fields(
         "channels": list(channels) if channels else None,
         "whatsappTemplate": whatsapp_template,
         "whatsappLanguage": whatsapp_language,
+        "whatsappSender": whatsapp_sender,
         "codeLength": code_length,
         "ttl": ttl,
         "fallback": "sms" if sms_fallback else None,
@@ -158,6 +160,9 @@ class Verifications(_Direct):
         ::
 
             v = client.messaging.verifications.start("+9647501234567")
+
+        ``whatsapp_sender=`` picks which of your WhatsApp numbers sends it (the
+        number in any format, or its phone number id).
         """
         return self._send(p.verification_start(verification_fields(to, **options)))
 

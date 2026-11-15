@@ -1017,6 +1017,7 @@ _VERIFICATION_FIELDS = (
     "channels",
     "whatsappTemplate",
     "whatsappLanguage",
+    "whatsappSender",
     "codeLength",
     "ttl",
     "fallback",
