@@ -563,6 +563,10 @@ def live_activity_end(
     )
 
 
+def live_activity_job(job_id: str) -> Request:
+    return Request("GET", "/partner/live-activities/jobs/{0}".format(_seg(job_id)), retry=True)
+
+
 def live_activity_start_template(
     template: Union[str, Mapping[str, Any]],
     activity_id: str,

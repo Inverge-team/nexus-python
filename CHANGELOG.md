@@ -4,6 +4,24 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.11.0] — 2026-11-22
+
+### Changed — Live Activities are delivered asynchronously
+- `start` / `start_template` / `update` / `update_data` / `end` (and the
+  builder's) are accepted at once (HTTP 202) and Nexus delivers them in the
+  background — per-push timeouts, retries, strict order per activity — so a
+  call never waits on Apple or Google and no longer times out when they're
+  slow. They now return `{accepted, jobId, activityId, status}` instead of the
+  device counts.
+
+### Added
+- `live_activities.job(job_id)` (sync + async): the outcome of a queued call —
+  `status`, `attempts`, `result` (`{ios, android, …}`), `lastError`.
+
+### Fixed
+- A repeated start for an activity a user already has now updates it instead
+  of starting a second one, so retrying a start is safe.
+
 ## [1.10.0] — 2026-11-22
 
 ### Added

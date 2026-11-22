@@ -865,6 +865,10 @@ class AsyncLiveActivities(AsyncResource):
     ) -> Dict[str, Any]:
         return self._dict(await self._send(p.live_activity_end(activity_id, content_state, dismissal_date, data)))
 
+    async def job(self, job_id: str):
+        """See :meth:`nexus.resources.LiveActivities.job`."""
+        return self._dict(await self._send(p.live_activity_job(job_id)))
+
     async def register_push_to_start_token(
         self, activity_type: str, token: str, *, distinct_id=None, device_key=None
     ) -> Dict[str, Any]:
