@@ -12,11 +12,12 @@ import random
 import time
 from typing import Any, Dict, Optional
 
+from . import _suspension
 from ._logging import delivering, logger
 from ._payloads import Request
 from .atransport import AsyncTransport, default_async_transport
 from .config import NexusConfig
-from .exceptions import NexusError, TransportError, api_error_for
+from .exceptions import BillingSuspendedError, NexusError, TransportError, api_error_for
 from .transport import RawResponse, Transport, default_transport
 
 __all__ = ["HttpEngine", "AsyncHttpEngine"]
@@ -34,6 +35,33 @@ def _encode(payload: Optional[Dict[str, Any]]) -> Optional[bytes]:
 class _EngineBase:
     def __init__(self, config: NexusConfig) -> None:
         self.config = config
+        self._suspension = _suspension.key_for(config.base_url, config.api_key)
+
+    def _admit(self, request: Request) -> None:
+        """Refuse locally — no request — while billing access is suspended."""
+        wait = _suspension.begin(self._suspension, request.path)
+        if wait > 0:
+            raise BillingSuspendedError(
+                _suspension.local_message(wait),
+                status=402,
+                code="billing_suspended",
+                method=request.method,
+                path=request.path,
+                retry_after=wait,
+                local=True,
+            )
+
+    def _observe(self, request: Request, response: RawResponse) -> None:
+        """Start the pause on a 402 ``billing_suspended``, lift it on any other answer."""
+        code = details = None
+        if response.status == 402:
+            payload = response.json()
+            error = payload.get("error") if isinstance(payload, dict) else None
+            if isinstance(error, dict):
+                code, details = error.get("code"), error.get("details")
+        seconds = _suspension.record(self._suspension, request.path, response.status, code, details)
+        if seconds is not None:
+            logger.warning("nexus: API access is suspended for an overdue invoice — pausing every call for %ds", seconds)
 
     def _headers(self, request: Request, has_body: bool) -> Dict[str, str]:
         headers: Dict[str, str] = {
@@ -102,6 +130,7 @@ class HttpEngine(_EngineBase):
             return self._execute(request)
 
     def _execute(self, request: Request) -> Any:
+        self._admit(request)
         url = self.config.url_for(request.path)
         body = request.raw if request.raw is not None else _encode(request.json)
         headers = self._headers(request, body is not None)
@@ -125,6 +154,7 @@ class HttpEngine(_EngineBase):
             if not response.ok and self._should_retry(response) and attempt + 1 < attempts:
                 time.sleep(self._backoff(attempt, response))
                 continue
+            self._observe(request, response)
             return self._parse(request, response)
 
         raise last_error or TransportError("{0} {1} failed".format(request.method, url))
@@ -152,6 +182,7 @@ class AsyncHttpEngine(_EngineBase):
             return await self._execute(request)
 
     async def _execute(self, request: Request) -> Any:
+        self._admit(request)
         url = self.config.url_for(request.path)
         body = request.raw if request.raw is not None else _encode(request.json)
         headers = self._headers(request, body is not None)
@@ -173,6 +204,7 @@ class AsyncHttpEngine(_EngineBase):
             if not response.ok and self._should_retry(response) and attempt + 1 < attempts:
                 await asyncio.sleep(self._backoff(attempt, response))
                 continue
+            self._observe(request, response)
             return self._parse(request, response)
 
         raise last_error or TransportError("{0} {1} failed".format(request.method, url))

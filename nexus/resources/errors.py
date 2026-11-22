@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from .. import _payloads as p
 from .base import Resource
+from ..exceptions import is_delivery_failure
 
 __all__ = ["Errors", "stack_frames", "exception_fingerprint"]
 
@@ -139,6 +140,8 @@ class Errors(Resource):
             exc = sys.exc_info()[1]
         if exc is None:
             return self.capture("capture_exception() called with no active exception", level="warn")
+        if is_delivery_failure(exc):
+            return {}  # Nexus itself unreachable/suspended — reporting it would loop
 
         message = str(exc) or type(exc).__name__
         frames = stack_frames(exc)

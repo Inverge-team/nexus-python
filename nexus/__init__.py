@@ -46,6 +46,7 @@ from .dispatcher import BackgroundDispatcher, DirectDispatcher, Dispatcher
 from .exceptions import (
     ApiError,
     AuthenticationError,
+    BillingSuspendedError,
     ConfigurationError,
     NexusError,
     NotFoundError,
@@ -129,6 +130,7 @@ __all__ = [
     "ValidationError",
     "RateLimitError",
     "ServerError",
+    "BillingSuspendedError",
 ]
 
 _LAZY = {"RealtimeSocket": ".realtime_socket", "AsyncNexusClient": ".aio"}

@@ -29,10 +29,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from .. import _suspension
 from .. import context as ctx
 from .._logging import logger
 from .._payloads import Request
 from ..dispatcher import Dispatcher
+from ..exceptions import ApiError, BillingSuspendedError, TransportError, is_delivery_failure
 from ._common import resolve_client
 
 __all__ = ["install_celery", "CeleryDispatcher", "nexus_delivery_task", "header_context"]
@@ -99,7 +101,7 @@ def install_celery(
                 ctx.unbind(token)
 
     def on_failure(task_id: str = "", exception: Optional[BaseException] = None, sender: Any = None, **kwargs: Any) -> None:
-        if not capture_errors or exception is None:
+        if not capture_errors or exception is None or is_delivery_failure(exception):
             return
         try:
             resolved.errors.capture_exception(
@@ -155,12 +157,28 @@ def nexus_delivery_task(celery_app: Any, client: Any = None, *, name: str = "nex
             from .._default import get_client
 
             target = get_client()
+        if _suspension.is_suspension_report(path, json):
+            return  # queued by an older SDK during a suspension — sending it is the loop
         try:
             target.request(Request(method, path, json, headers or {}))
-        except Exception as exc:  # pragma: no cover - broker retry path
+        except Exception as exc:
+            # The task never FAILS: a failed task fires task_failure, which
+            # reports it to Nexus Errors through this same task — one refused
+            # call would become an endless stream. Billing suspension and other
+            # 4xx are dropped; only an outage is retried, then dropped.
+            if not _retryable(exc) or self.request.retries >= self.max_retries:
+                return
             raise self.retry(exc=exc, countdown=min(60, 2 ** self.request.retries))
 
     return deliver
+
+
+def _retryable(exc: BaseException) -> bool:
+    if isinstance(exc, BillingSuspendedError):
+        return False
+    if isinstance(exc, ApiError):
+        return exc.status == 429 or exc.status >= 500
+    return isinstance(exc, TransportError)
 
 
 def header_context() -> Dict[str, str]:

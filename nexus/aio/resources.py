@@ -30,6 +30,7 @@ from ..resources.shield import body_hash as compute_body_hash
 from ..resources.messaging import FileInput, message_fields, new_idempotency_key, read_file, verification_fields
 from ..resources.push_auth import challenge_fields
 from ..resources.voice import ENDPOINTS, PRESENCE, ROLES
+from ..exceptions import is_delivery_failure
 
 if TYPE_CHECKING:  # pragma: no cover
     from .client import AsyncNexusClient
@@ -295,7 +296,7 @@ class AsyncErrors(AsyncResource):
             import sys
 
             exc = sys.exc_info()[1]
-        if exc is None:
+        if exc is None or is_delivery_failure(exc):
             return {}
         options.setdefault("type", type(exc).__name__)
         return await self.capture(

@@ -26,7 +26,9 @@ from ._logging import logger, set_debug
 from .batcher import BatchQueue
 from .config import NexusConfig
 from .dispatcher import BackgroundDispatcher, DirectDispatcher, Dispatcher
-from .exceptions import NexusError
+from . import _suspension
+from ._suspension import is_telemetry as _is_telemetry
+from .exceptions import BillingSuspendedError, NexusError
 from .resources import (
     Errors,
     Events,
@@ -227,10 +229,18 @@ class NexusClient:
         if self._closed:
             logger.warning("nexus: request after close() — %s %s", request.method, request.path)
             return None
+        if _is_telemetry(request.path) and _suspension.remaining(self.engine._suspension, request.path) > 0:
+            return None  # billing suspended: drop telemetry before it is queued
         if direct:
             return self.engine.execute(request)
         try:
             return self.dispatcher.dispatch(request)
+        except BillingSuspendedError:
+            if _is_telemetry(request.path):
+                return None
+            if self.config.silent:
+                return None
+            raise
         except NexusError as exc:
             if self.config.silent:
                 logger.warning("nexus: %s %s failed: %s", request.method, request.path, exc)

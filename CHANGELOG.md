@@ -4,6 +4,24 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.10.0] — 2026-11-22
+
+### Added
+- **Billing suspension stops all calls.** After one `402 billing_suspended` the
+  SDK sends nothing for the pause the API asks for (`details.retryAfterSeconds`,
+  default 5 minutes), across every client in the process: telemetry is dropped,
+  other calls raise the new `BillingSuspendedError` (`local=True`) without a
+  request. When the pause ends one probe goes out; a refusal starts a new pause,
+  success resumes. Messaging is never paused; `402 insufficient_balance` is not a
+  suspension.
+- `nexus.exceptions.is_delivery_failure(exc)`.
+
+### Fixed
+- **No more report loops.** The Celery delivery task never fails (it drops 4xx
+  and suspensions, retries only outages, then drops), and `task_failure` /
+  `capture_exception` never report the SDK's own failure to reach Nexus — a
+  failed delivery used to be reported through another delivery, endlessly.
+
 ## [1.8.0] — 2026-11-06
 
 ### Added
