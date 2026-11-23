@@ -50,6 +50,7 @@ def request_info_from_scope(scope: Dict[str, Any]) -> RequestInfo:
         headers=headers,
         cookies=parse_cookies(headers.get("cookie")),
         client_ip=client_ip_from(headers, peer),
+        peer_ip=peer,
         query=query or None,
     )
 

@@ -150,6 +150,7 @@ class NexusFlask:
             headers=headers,
             cookies=dict(request.cookies or {}),
             client_ip=client_ip_from(headers, request.remote_addr),
+            peer_ip=request.remote_addr,
             query=request.query_string.decode("latin-1") if request.query_string else None,
         )
 

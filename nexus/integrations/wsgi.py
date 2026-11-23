@@ -44,6 +44,7 @@ def request_info_from_environ(environ: Dict[str, Any]) -> RequestInfo:
         headers=headers,
         cookies=parse_cookies(headers.get("cookie")),
         client_ip=client_ip_from(headers, environ.get("REMOTE_ADDR")),
+        peer_ip=environ.get("REMOTE_ADDR"),
         query=query,
     )
 

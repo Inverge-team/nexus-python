@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from .. import context as ctx
+from ..client_ip import bind_client_ip, unbind_client_ip
 from .._logging import logger
 
 __all__ = ["RequestInfo", "RequestTracker", "DEFAULT_IGNORE_PATHS"]
@@ -51,6 +52,10 @@ class RequestInfo:
     cookies: Mapping[str, str] = field(default_factory=dict)
     client_ip: Optional[str] = None
     query: Optional[str] = None
+    #: The address the framework/server resolved (socket peer, or the real
+    #: client once a trusted-proxy fix has run) — never a raw header. This one
+    #: is forwarded to Messaging's per-IP limit; ``client_ip`` is telemetry.
+    peer_ip: Optional[str] = None
 
     def header(self, name: str) -> Optional[str]:
         lowered = name.lower()
@@ -131,7 +136,12 @@ class RequestTracker:
             url=info.url or info.path,
             browser=info.user_agent,
         )
-        state: Dict[str, Any] = {"token": token, "started": time.monotonic(), "info": info}
+        state: Dict[str, Any] = {
+            "token": token,
+            "ip_token": bind_client_ip(info.peer_ip),
+            "started": time.monotonic(),
+            "info": info,
+        }
 
         wants_session = self.track_sessions if track_sessions is None else track_sessions
         if wants_session and not self.ignored(info.path):
@@ -178,6 +188,9 @@ class RequestTracker:
             token = state.get("token")
             if token is not None:
                 ctx.unbind(token)
+            ip_token = state.get("ip_token")
+            if ip_token is not None:
+                unbind_client_ip(ip_token)
 
     def capture(
         self, exc: BaseException, info: Optional[RequestInfo] = None, *, status: Optional[int] = None

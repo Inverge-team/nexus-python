@@ -12,7 +12,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
+
 from urllib.parse import quote
+
+from .client_ip import client_ip_headers
 
 __all__ = ["Request", "compact", "RoomMessage"]
 
@@ -987,7 +990,11 @@ def messaging_send(fields: Mapping[str, Any], idempotency_key: str) -> Request:
         "POST",
         "/partner/messaging/messages",
         compact({k: fields.get(k) for k in _MESSAGE_FIELDS}),
-        headers={"Idempotency-Key": idempotency_key},
+        headers={
+            "Idempotency-Key": idempotency_key,
+            # Only an OTP picks up the request's address by itself — see nexus.client_ip.
+            **(client_ip_headers(fields.get("clientIp")) if fields.get("messageClass") == "otp" else {}),
+        },
         retry=True,
     )
 
@@ -1018,6 +1025,7 @@ def messaging_upload_telegram(data: bytes, content_type: str, filename: Optional
 
 _VERIFICATION_FIELDS = (
     "to",
+    "clientIp",
     "channels",
     "whatsappTemplate",
     "whatsappLanguage",
@@ -1040,6 +1048,7 @@ def verification_start(fields: Mapping[str, Any]) -> Request:
         "POST",
         "/partner/messaging/verifications",
         compact({k: fields.get(k) for k in _VERIFICATION_FIELDS}),
+        headers=client_ip_headers(fields.get("clientIp")),
     )
 
 

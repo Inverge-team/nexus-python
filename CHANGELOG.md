@@ -4,6 +4,19 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.12.0] — 2026-11-23
+
+### Added — Messaging forwards your end user's IP
+- `verifications.start()` and `send(message_class="otp")` send the request's
+  client IP as `X-Client-IP`, for the per-IP rate limit. The Django / Flask /
+  ASGI / WSGI middleware binds it from the address the framework resolved
+  (never a raw `X-Forwarded-For`); Celery tasks carry it from the request that
+  queued them (`propagate_client_ip()`, also run by `install_celery`). Other
+  queues: `nexus.client_ip.current_client_ip()` + `with client_ip(ip):`.
+- `verifications.start(..., client_ip=...)` overrides it.
+  `NEXUS_FORWARD_CLIENT_IP=false` or `set_forwarding(False)` turns it off.
+  Private and proxy addresses are never sent.
+
 ## [1.11.0] — 2026-11-22
 
 ### Changed — Live Activities are delivered asynchronously
