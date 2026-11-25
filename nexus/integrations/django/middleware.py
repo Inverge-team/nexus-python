@@ -96,5 +96,6 @@ class NexusMiddleware:
             headers=headers,
             cookies=dict(getattr(request, "COOKIES", {}) or {}),
             client_ip=client_ip_from(headers, request.META.get("REMOTE_ADDR")),
+            peer_ip=request.META.get("REMOTE_ADDR"),
             query=request.META.get("QUERY_STRING") or None,
         )

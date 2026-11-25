@@ -27,7 +27,9 @@ from .._engine import AsyncHttpEngine
 from .._logging import logger, set_debug
 from ..atransport import AsyncTransport
 from ..config import NexusConfig
-from ..exceptions import NexusError
+from .. import _suspension
+from .._suspension import is_telemetry as _is_telemetry
+from ..exceptions import BillingSuspendedError, NexusError
 from ._batcher import AsyncBatchQueue
 from .resources import (
     AsyncErrors,
@@ -194,10 +196,16 @@ class AsyncNexusClient:
         if self._closed:
             logger.warning("nexus: request after aclose() — %s %s", request.method, request.path)
             return None
+        if _is_telemetry(request.path) and _suspension.remaining(self.engine._suspension, request.path) > 0:
+            return None  # billing suspended: drop telemetry
         if direct:
             return await self.engine.execute(request)
         try:
             return await self.engine.execute(request)
+        except BillingSuspendedError:
+            if _is_telemetry(request.path) or self.config.silent:
+                return None
+            raise
         except NexusError as exc:
             if self.config.silent:
                 logger.warning("nexus: %s %s failed: %s", request.method, request.path, exc)

@@ -221,7 +221,7 @@ class LiveActivityBuilder:
     # ── terminal ─────────────────────────────────────────────────────────────
 
     def start(self) -> Dict[str, Any]:
-        """Start the activity. Returns ``{ios, android, iosTargets, iosWarning?}``."""
+        """Start the activity. Returns ``{accepted, jobId, activityId, status}`` (delivered asynchronously)."""
         if self._template is not None:
             if self._start_template_fn is None:
                 raise ValueError("this client cannot start templated activities")

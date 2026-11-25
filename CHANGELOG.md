@@ -4,6 +4,55 @@ All notable changes to `inverge-nexus` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.12.0] — 2026-11-23
+
+### Added — Messaging forwards your end user's IP
+- `verifications.start()` and `send(message_class="otp")` send the request's
+  client IP as `X-Client-IP`, for the per-IP rate limit. The Django / Flask /
+  ASGI / WSGI middleware binds it from the address the framework resolved
+  (never a raw `X-Forwarded-For`); Celery tasks carry it from the request that
+  queued them (`propagate_client_ip()`, also run by `install_celery`). Other
+  queues: `nexus.client_ip.current_client_ip()` + `with client_ip(ip):`.
+- `verifications.start(..., client_ip=...)` overrides it.
+  `NEXUS_FORWARD_CLIENT_IP=false` or `set_forwarding(False)` turns it off.
+  Private and proxy addresses are never sent.
+
+## [1.11.0] — 2026-11-22
+
+### Changed — Live Activities are delivered asynchronously
+- `start` / `start_template` / `update` / `update_data` / `end` (and the
+  builder's) are accepted at once (HTTP 202) and Nexus delivers them in the
+  background — per-push timeouts, retries, strict order per activity — so a
+  call never waits on Apple or Google and no longer times out when they're
+  slow. They now return `{accepted, jobId, activityId, status}` instead of the
+  device counts.
+
+### Added
+- `live_activities.job(job_id)` (sync + async): the outcome of a queued call —
+  `status`, `attempts`, `result` (`{ios, android, …}`), `lastError`.
+
+### Fixed
+- A repeated start for an activity a user already has now updates it instead
+  of starting a second one, so retrying a start is safe.
+
+## [1.10.0] — 2026-11-22
+
+### Added
+- **Billing suspension stops all calls.** After one `402 billing_suspended` the
+  SDK sends nothing for the pause the API asks for (`details.retryAfterSeconds`,
+  default 5 minutes), across every client in the process: telemetry is dropped,
+  other calls raise the new `BillingSuspendedError` (`local=True`) without a
+  request. When the pause ends one probe goes out; a refusal starts a new pause,
+  success resumes. Messaging is never paused; `402 insufficient_balance` is not a
+  suspension.
+- `nexus.exceptions.is_delivery_failure(exc)`.
+
+### Fixed
+- **No more report loops.** The Celery delivery task never fails (it drops 4xx
+  and suspensions, retries only outages, then drops), and `task_failure` /
+  `capture_exception` never report the SDK's own failure to reach Nexus — a
+  failed delivery used to be reported through another delivery, endlessly.
+
 ## [1.8.0] — 2026-11-06
 
 ### Added

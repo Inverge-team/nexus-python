@@ -29,6 +29,8 @@ __all__ = [
     "ConflictError",
     "ServiceDisabledError",
     "ServerError",
+    "BillingSuspendedError",
+    "is_delivery_failure",
     "api_error_for",
 ]
 
@@ -129,6 +131,41 @@ class RateLimitError(ApiError):
         self.retry_after = retry_after
 
 
+class BillingSuspendedError(ApiError):
+    """402 ``billing_suspended`` — the organization's API access is suspended
+    for an overdue invoice.
+
+    After the first one the SDK stops calling the API for :attr:`retry_after`
+    seconds; calls made meanwhile raise this at once with :attr:`local` true and
+    no request is sent (telemetry is dropped quietly). Access returns by itself
+    once the invoice is settled.
+    """
+
+    def __init__(self, *args: Any, retry_after: float = 0, local: bool = False, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.retry_after = retry_after
+        self.local = local
+
+
+def is_delivery_failure(exc: Optional[BaseException]) -> bool:
+    """Whether ``exc`` (or what it was raised from) is the SDK failing to REACH
+    Nexus — billing suspension, rate limiting, an outage, the network.
+
+    Those are never reported to Nexus Errors: the report would travel the same
+    failing path, fail, and be reported again. A 4xx the API answered for a bad
+    request (validation, not found…) is still the app's bug and is reported.
+    """
+    seen = 0
+    while exc is not None and seen < 10:
+        if isinstance(exc, (BillingSuspendedError, TransportError)):
+            return True
+        if isinstance(exc, ApiError) and (exc.code == "billing_suspended" or exc.status == 429 or exc.status >= 500):
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False
+
+
 class ServerError(ApiError):
     """5xx — the Nexus API failed. Safe to retry idempotent calls."""
 
@@ -175,6 +212,15 @@ def api_error_for(
         path=path,
         body=raw,
     )
+    if status == 402 and code == "billing_suspended":
+        from . import _suspension
+
+        raw_seconds = details.get("retryAfterSeconds") if isinstance(details, Mapping) else None
+        return BillingSuspendedError(
+            message,
+            retry_after=float(raw_seconds) if isinstance(raw_seconds, (int, float)) else float(_suspension.DEFAULT_PAUSE_SECONDS),
+            **kwargs,  # type: ignore[arg-type]
+        )
     if cls is RateLimitError:
         retry_after = None
         if headers:

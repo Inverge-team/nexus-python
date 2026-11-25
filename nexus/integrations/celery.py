@@ -29,13 +29,58 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from .. import _suspension
 from .. import context as ctx
 from .._logging import logger
 from .._payloads import Request
 from ..dispatcher import Dispatcher
+from ..exceptions import ApiError, BillingSuspendedError, TransportError, is_delivery_failure
 from ._common import resolve_client
 
-__all__ = ["install_celery", "CeleryDispatcher", "nexus_delivery_task", "header_context"]
+__all__ = ["install_celery", "propagate_client_ip", "CeleryDispatcher", "nexus_delivery_task", "header_context"]
+
+#: Task header carrying the end user's IP from the request that queued the task.
+CLIENT_IP_HEADER = "nexus_client_ip"
+_client_ip_installed = False
+
+
+def propagate_client_ip() -> None:
+    """Carry the end user's IP from the request that queues a task to the worker.
+
+    Written into the task headers when the task is published (still inside
+    the request, where the Nexus middleware bound it) and bound again on the
+    worker for the task's run — so a task that starts a verification forwards
+    the address of the user who asked for the code. A task queued with no
+    request behind it carries none. Idempotent; ``install_celery`` calls it.
+    """
+    global _client_ip_installed
+    if _client_ip_installed:
+        return
+    from celery import signals
+
+    from ..client_ip import _forwarding_on, bind_client_ip, current_client_ip, unbind_client_ip
+
+    tokens: Dict[str, Any] = {}
+
+    def on_publish(headers: Any = None, **kwargs: Any) -> None:
+        ip = current_client_ip()
+        if ip and headers is not None and _forwarding_on():
+            headers[CLIENT_IP_HEADER] = ip
+
+    def on_prerun(task_id: str = "", task: Any = None, **kwargs: Any) -> None:
+        req = getattr(task, "request", None)
+        ip = getattr(req, CLIENT_IP_HEADER, None) or (getattr(req, "headers", None) or {}).get(CLIENT_IP_HEADER)
+        tokens[task_id] = bind_client_ip(ip)
+
+    def on_postrun(task_id: str = "", **kwargs: Any) -> None:
+        token = tokens.pop(task_id, None)
+        if token is not None:
+            unbind_client_ip(token)
+
+    signals.before_task_publish.connect(on_publish, weak=False)
+    signals.task_prerun.connect(on_prerun, weak=False)
+    signals.task_postrun.connect(on_postrun, weak=False)
+    _client_ip_installed = True
 
 
 def install_celery(
@@ -99,7 +144,7 @@ def install_celery(
                 ctx.unbind(token)
 
     def on_failure(task_id: str = "", exception: Optional[BaseException] = None, sender: Any = None, **kwargs: Any) -> None:
-        if not capture_errors or exception is None:
+        if not capture_errors or exception is None or is_delivery_failure(exception):
             return
         try:
             resolved.errors.capture_exception(
@@ -120,6 +165,7 @@ def install_celery(
     signals.task_prerun.connect(on_prerun, weak=False)
     signals.task_postrun.connect(on_postrun, weak=False)
     signals.task_failure.connect(on_failure, weak=False)
+    propagate_client_ip()
     if flush_on_shutdown:
         signals.worker_shutdown.connect(on_shutdown, weak=False)
     return resolved
@@ -155,12 +201,28 @@ def nexus_delivery_task(celery_app: Any, client: Any = None, *, name: str = "nex
             from .._default import get_client
 
             target = get_client()
+        if _suspension.is_suspension_report(path, json):
+            return  # queued by an older SDK during a suspension — sending it is the loop
         try:
             target.request(Request(method, path, json, headers or {}))
-        except Exception as exc:  # pragma: no cover - broker retry path
+        except Exception as exc:
+            # The task never FAILS: a failed task fires task_failure, which
+            # reports it to Nexus Errors through this same task — one refused
+            # call would become an endless stream. Billing suspension and other
+            # 4xx are dropped; only an outage is retried, then dropped.
+            if not _retryable(exc) or self.request.retries >= self.max_retries:
+                return
             raise self.retry(exc=exc, countdown=min(60, 2 ** self.request.retries))
 
     return deliver
+
+
+def _retryable(exc: BaseException) -> bool:
+    if isinstance(exc, BillingSuspendedError):
+        return False
+    if isinstance(exc, ApiError):
+        return exc.status == 429 or exc.status >= 500
+    return isinstance(exc, TransportError)
 
 
 def header_context() -> Dict[str, str]:

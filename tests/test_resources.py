@@ -332,6 +332,12 @@ class LiveActivitiesTest(unittest.TestCase):
         self.assertEqual(transport.last["path"], "partner/live-activities/order_42/end")
         self.assertEqual(transport.last["json"]["dismissalDate"], "2026-01-01T12:00:00Z")
 
+    def test_job_reads_the_outcome(self):
+        client, transport = make_client()
+        client.live_activities.job("j1")
+        self.assertEqual(transport.last["path"], "partner/live-activities/jobs/j1")
+        self.assertEqual(transport.last["method"], "GET")
+
     def test_empty_content_state_is_an_object(self):
         client, transport = make_client()
         client.live_activities.start("T", "id")

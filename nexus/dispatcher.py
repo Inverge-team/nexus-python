@@ -26,7 +26,7 @@ from typing import Any, Optional
 from ._engine import HttpEngine
 from ._logging import logger
 from ._payloads import Request
-from .exceptions import NexusError
+from .exceptions import BillingSuspendedError, NexusError
 
 __all__ = ["Dispatcher", "DirectDispatcher", "BackgroundDispatcher"]
 
@@ -154,6 +154,8 @@ class BackgroundDispatcher(Dispatcher):
                     return
                 try:
                     self.engine.execute(request)
+                except BillingSuspendedError:
+                    pass  # paused — the engine already warned once
                 except NexusError as exc:
                     logger.warning("nexus: %s %s failed: %s", request.method, request.path, exc)
                 except Exception as exc:  # pragma: no cover - defensive

@@ -6,6 +6,13 @@ begins, update as its status changes, end when it's done.
 
 iOS needs the APNs key configured in the console (Live Activities cannot go
 through FCM) and a Widget Extension in the app. Android needs no extra setup.
+
+start / update / end are accepted at once (HTTP 202) and delivered by Nexus in
+the background — per-push timeouts, retries, strict order per activity — so a
+call never waits on Apple or Google. Each returns ``{accepted, jobId,
+activityId, status}``; :meth:`LiveActivities.job` reports the outcome. A
+repeated start for an activity a user already has updates it instead, so
+retrying a start is safe.
 """
 
 from __future__ import annotations
@@ -58,7 +65,8 @@ class LiveActivities(Resource):
     ) -> Dict[str, Any]:
         """Start a templated activity. ``data``: ``step``, ``state``, ``progress``,
         ``etaAt`` (unix s), ``values``. Each device gets its own language unless
-        ``lang`` forces one. Returns ``{ios, android, iosTargets, iosWarning?}``."""
+        ``lang`` forces one. Returns ``{accepted, jobId, activityId, status}`` — queued; Nexus delivers it in the
+        background (retries, in order per activity). :meth:`job` reports the outcome."""
         return self._dict(
             self._send(
                 p.live_activity_start_template(
@@ -92,7 +100,8 @@ class LiveActivities(Resource):
     ) -> Dict[str, Any]:
         """Start an activity. Omit ``distinct_ids`` for a shared activity.
 
-        Returns ``{ios, android}`` — how many devices were reached.
+        Returns ``{accepted, jobId, activityId, status}`` — queued; Nexus delivers it in the
+        background (retries, in order per activity). :meth:`job` reports the outcome.
         """
         return self._dict(
             self._send(
@@ -127,6 +136,12 @@ class LiveActivities(Resource):
         """End the activity, optionally with a final state and dismissal time.
         Templated: ``data`` is the final state, e.g. ``{"step": "completed"}``."""
         return self._dict(self._send(p.live_activity_end(activity_id, content_state, dismissal_date, data)))
+
+    def job(self, job_id: str) -> Dict[str, Any]:
+        """The outcome of a queued start / update / end: ``status`` (pending →
+        running → done, or ``dead`` once Nexus gave up retrying), ``attempts``,
+        ``result`` (``{ios, android, …}`` devices reached) and ``lastError``."""
+        return self._dict(self._send(p.live_activity_job(job_id)))
 
     def register_push_to_start_token(
         self,

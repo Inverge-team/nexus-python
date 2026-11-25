@@ -87,6 +87,7 @@ def verification_fields(
     sender_username: Optional[str] = None,
     max_attempts: Optional[int] = None,
     metadata: Optional[Mapping[str, Any]] = None,
+    client_ip: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not to:
         raise ValueError("verifications.start() requires a phone number in E.164 form.")
@@ -105,6 +106,7 @@ def verification_fields(
         "senderUsername": sender_username,
         "maxAttempts": max_attempts,
         "metadata": dict(metadata) if metadata is not None else None,
+        "clientIp": client_ip,
     }
 
 
@@ -163,6 +165,11 @@ class Verifications(_Direct):
 
         ``whatsapp_sender=`` picks which of your WhatsApp numbers sends it (the
         number in any format, or its phone number id).
+
+        ``client_ip=`` is your end user's IP, for the per-IP rate limit. Leave
+        it out and the address of the request being handled is sent (bound by
+        the Nexus middleware, and carried into Celery tasks — see
+        :mod:`nexus.client_ip`).
         """
         return self._send(p.verification_start(verification_fields(to, **options)))
 
